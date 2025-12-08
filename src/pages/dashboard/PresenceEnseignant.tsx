@@ -45,7 +45,9 @@ interface Presence {
 }
 
 // --------------------------------------------------------------------
-
+export type { Module, Student, Seance, Presence };
+export interface TeacherModule extends Module {}
+export interface StudentPresence extends Student {}
 export default function PresenceEnseignant() {
   const [modules, setModules] = useState<Module[]>([]);
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
