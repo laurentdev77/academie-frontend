@@ -6,7 +6,8 @@
     "jsx": "react-jsx",
 
     "moduleResolution": "bundler",
-    "types": ["react", "react-dom", "vite/client"],
+
+    "types": ["vite/client"],
 
     "strict": true,
     "esModuleInterop": true,
@@ -22,7 +23,8 @@
       "@/*": ["src/*"]
     }
   },
-
-  "include": ["src", "env.d.ts", "src/react-app-env.d.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "src",
+    "env.d.ts"
+  ]
 }
