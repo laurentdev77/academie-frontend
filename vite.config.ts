@@ -8,5 +8,18 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "src")
     }
+  },
+  build: {
+    rollupOptions: {
+      external: [
+        "@fullcalendar/core",
+        "@fullcalendar/core/index.js",
+        "@fullcalendar/daygrid",
+        "@fullcalendar/timegrid",
+        "@fullcalendar/interaction",
+        "@fullcalendar/list",
+        "@fullcalendar/rrule"
+      ]
+    }
   }
 });
