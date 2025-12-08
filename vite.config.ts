@@ -11,15 +11,8 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      external: [
-        "@fullcalendar/core",
-        "@fullcalendar/core/index.js",
-        "@fullcalendar/daygrid",
-        "@fullcalendar/timegrid",
-        "@fullcalendar/interaction",
-        "@fullcalendar/list",
-        "@fullcalendar/rrule"
-      ]
+      // Ignore ALL FullCalendar modules — avoids all resolution errors
+      external: (id) => id.startsWith("@fullcalendar/")
     }
   }
 });
