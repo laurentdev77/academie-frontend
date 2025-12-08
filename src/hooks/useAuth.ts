@@ -1,6 +1,6 @@
 // src/hooks/useAuth.ts
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { register, login, getProfile, logout } from "@/services/authService";
+import { useMutation } from "@tanstack/react-query";
+import { register, login, logout } from "@/services/authService";
 
 interface RegisterData {
   username: string;
@@ -8,8 +8,10 @@ interface RegisterData {
   password: string;
 }
 
+// ⚠️ Votre backend attend :
+// { usernameOrEmail, password }
 interface LoginData {
-  email: string;
+  usernameOrEmail: string;
   password: string;
 }
 
@@ -25,13 +27,9 @@ export const useLogin = () => {
   });
 };
 
-export const useProfile = () => {
-  return useQuery({
-    queryKey: ["profile"],
-    queryFn: getProfile,
-    enabled: !!localStorage.getItem("token"),
-  });
-};
+// ❌ getProfile supprimé — il n'existe pas dans authService
+// Si vous voulez récupérer le profil plus tard,
+// il faudra d'abord ajouter la fonction dans le backend + service.
 
 export const useLogout = () => {
   return () => {
