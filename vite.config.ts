@@ -12,7 +12,17 @@ export default defineConfig({
   build: {
     sourcemap: false,
     rollupOptions: {
-      external: [], // IMPORTANT : ne rien mettre ici !!
+      external: [
+        "@fullcalendar/core",
+        "@fullcalendar/core/index.js",
+        "@fullcalendar/core/internal",
+        "@fullcalendar/react",
+        "@fullcalendar/daygrid",
+        "@fullcalendar/timegrid",
+        "@fullcalendar/interaction",
+        "@fullcalendar/list",
+        "@fullcalendar/rrule"
+      ]
     }
   }
 });
