@@ -1,0 +1,55 @@
+/* ================== TAILWIND IMPORTS ================== */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================== GLOBAL STYLES ================== */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  @apply bg-gray-100 text-gray-900 antialiased;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+}
+
+/* ================== CUSTOM SCROLLBAR ================== */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151; /* gris foncé */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563; /* gris moyen */
+}
+
+::-webkit-scrollbar-track {
+  background: #1f2937; /* gris très foncé */
+}
+
+/* ================== BUTTON STYLES ================== */
+.btn-primary {
+  @apply bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-4 rounded inline-flex items-center transition duration-200;
+}
+
+.btn-secondary {
+  @apply bg-green-700 hover:bg-green-800 text-white font-semibold py-2 px-4 rounded transition duration-200;
+}
+
+/* ================== PAGE TRANSITION ================== */
+.page-enter {
+  opacity: 0;
+  transform: scale(0.98);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 300ms, transform 300ms;
+}

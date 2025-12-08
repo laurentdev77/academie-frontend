@@ -1,0 +1,255 @@
+// src/layouts/DashboardLayout.tsx
+import React, { useEffect, useState } from "react";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import axios from "axios";
+import { Button } from "@/components/ui/button";
+import {
+  LucideHome,
+  LucideUser,
+  LucideBook,
+  LucideClipboard,
+  LucideCalendarDays,
+  Users as LucideUsers,
+  LucideLogOut,
+  LucideMenu,
+  LucideCheckSquare,
+  LucideRefreshCw,
+} from "lucide-react";
+
+/**
+ * DashboardLayout — style "RDC officiel"
+ *
+ * - Lit le profil via /api/auth/profile (token)
+ * - Gère l'affichage des liens selon rôle
+ * - Responsive: sidebar collapsible + mobile drawer
+ *
+ * NOTE: adapte API_BASE si nécessaire.
+ */
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+interface User {
+  id?: string;
+  username?: string;
+  role?: { name?: string };
+  avatarUrl?: string | null;
+  email?: string | null;
+}
+
+interface NavItem {
+  name: string;
+  path: string;
+  icon: React.ReactNode;
+  roles: string[]; // allowed roles
+}
+
+const DashboardLayout: React.FC = () => {
+  const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Nav items (unique names)
+  const navItems: NavItem[] = [
+    { name: "Accueil", path: "/dashboard", icon: <LucideHome className="w-5 h-5" />, roles: ["student", "teacher", "secretary", "admin", "DE"] },
+    { name: "Calendrier Académique", path: "/dashboard/CalendrierAcademique", icon: <LucideCalendarDays className="w-5 h-5" />, roles: ["secretary", "admin", "DE"] },
+    { name: "Mon Calendrier Académique", path: "/dashboard/CalendrierEnseignant", icon: <LucideCalendarDays className="w-5 h-5" />, roles: ["teacher"] },
+    { name: "Mon Calendrier Académique", path: "/dashboard/CalendrierEtudiant", icon: <LucideCalendarDays className="w-5 h-5" />, roles: ["student"] },
+    { name: "Elèves Officiers", path: "/dashboard/etudiants", icon: <LucideUser className="w-5 h-5" />, roles: ["secretary", "admin", "DE","secretary"] },
+    { name: "Elèves Officiers", path: "/dashboard/EtudiantsEnseignant", icon: <LucideUser className="w-5 h-5" />, roles: ["teacher"] },
+    { name: "Enseignants", path: "/dashboard/Enseignants", icon: <LucideUser className="w-5 h-5" />, roles: ["secretary", "admin", "DE"] },
+    { name: "Utilisateurs", path: "/dashboard/utilisateurs", icon: <LucideUsers className="w-5 h-5" />, roles: ["admin", "DE","secretary"] },
+    { name: "Filières", path: "/dashboard/filieres", icon: <LucideBook className="w-5 h-5" />, roles: ["admin", "DE"] },
+    { name: "Promotions", path: "/dashboard/promotions", icon: <LucideBook className="w-5 h-5" />, roles: ["admin", "DE"] },
+    { name: "Modules (Cours)", path: "/dashboard/modules", icon: <LucideBook className="w-5 h-5" />, roles: ["admin","secretary", "DE"] },
+    { name: "Modules (Cours)", path: "/dashboard/ModulesEtudiant", icon: <LucideBook className="w-5 h-5" />, roles: ["student"] },
+    { name: "Mes Modules (Cours)", path: "/dashboard/ModulesEnseignant", icon: <LucideBook className="w-5 h-5" />, roles: ["teacher"] },
+    { name: "Notes des EO", path: "/dashboard/notes", icon: <LucideClipboard className="w-5 h-5" />, roles: ["admin","secretary", "DE"] },
+    { name: "Notes des EO", path: "/dashboard/NotesEnseignant", icon: <LucideClipboard className="w-5 h-5" />, roles: ["teacher"] },
+    { name: "Mes Notes", path: "/dashboard/NotesEtudiant", icon: <LucideClipboard className="w-5 h-5" />, roles: ["student"] },
+    { name: "Bulletins", path: "/dashboard/bulletins", icon: <LucideClipboard className="w-5 h-5" />, roles: ["admin", "secretary", "DE"] },
+    { name: "Mon Bulletin", path: "/dashboard/MonBulletin", icon: <LucideClipboard className="w-5 h-5" />, roles: ["student"] },
+    { name: "Présences", path: "/dashboard/presences", icon: <LucideCheckSquare className="w-5 h-5" />, roles: ["teacher"] },
+    { name: "Présences", path: "/dashboard/presenceAdmin", icon: <LucideCheckSquare className="w-5 h-5" />, roles: ["secretary", "admin", "DE"] },
+    { name: "Mes Présences", path: "/dashboard/PresencesEtudiant", icon: <LucideCheckSquare className="w-5 h-5" />, roles: ["student"] },
+  ];
+
+  // Helper: token header
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+  // Fetch profile from backend (if token present)
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!token) return;
+      setLoadingProfile(true);
+      setAuthError(null);
+      try {
+        const res = await axios.get(`${API_BASE}/auth/profile`, { headers });
+        const u = res.data?.user ?? res.data?.user ?? null;
+        // normalize
+        const normalized: User | null = u
+          ? {
+              id: u.id,
+              username: u.username ?? u.name ?? "Utilisateur",
+              role: u.role ?? (u.roleId ? { name: u.roleId } : undefined),
+              avatarUrl: u.photoUrl ?? u.avatarUrl ?? null,
+              email: u.email ?? null,
+            }
+          : null;
+        setUser(normalized);
+        // store for other pages (safe)
+        try {
+          if (normalized) localStorage.setItem("user", JSON.stringify(normalized));
+        } catch { /* ignore storage errors */ }
+      } catch (err: any) {
+        console.error("fetchProfile error:", err);
+        setAuthError(err.response?.data?.message ?? "Impossible de charger le profil.");
+        // remove invalid token/user to avoid loops
+        try {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+        } catch {}
+        setUser(null);
+      } finally {
+        setLoadingProfile(false);
+      }
+    };
+    fetchProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+    } catch {}
+    window.location.href = "/login";
+  };
+
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(path + "/");
+
+  const avatarInitials = (u?: User | null) => {
+    if (!u) return "AM";
+    const parts = (u.username || "User").split(" ");
+    const initials = parts.length === 1 ? parts[0][0] : parts[0][0] + (parts[1] ? parts[1][0] : "");
+    return initials.toUpperCase();
+  };
+
+  // Render
+  return (
+    <div className="flex h-screen" style={{ background: "#F1F3F5" }}>
+      {/* Sidebar */}
+      <aside
+        className={`transition-all duration-300 shadow-sm ${collapsed ? "w-20" : "w-64"} bg-white border-r flex flex-col`}
+      >
+        <div className="p-4 border-b flex items-center justify-between" style={{ background: "#00A3E0", color: "white" }}>
+          <div className="flex items-center gap-3">
+            {!collapsed ? (
+              <div className="flex items-center gap-3">
+                <div className="rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm" style={{ background: "#FFD100", color: "#0f172a" }}>
+                  AM
+                </div>
+                <div>
+                  <div className="text-sm font-semibold">Académie Militaire</div>
+                  <div className="text-xs opacity-90">FARDC</div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm" style={{ background: "#FFD100", color: "#0f172a" }}>AM</div>
+            )}
+          </div>
+
+          <Button size="sm" variant="ghost" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle sidebar" className="text-white">
+            <LucideMenu className="w-4 h-4" />
+          </Button>
+        </div>
+
+        <nav className="p-3 flex-1 overflow-auto">
+          {user ? (
+            navItems
+              .filter((item) => item.roles.includes(user.role?.name ?? ""))
+              .map((item) => (
+                <Link key={item.path} to={item.path} className={`flex items-center gap-3 px-3 py-2 rounded-md my-1 transition-colors ${isActive(item.path) ? "bg-[#00A3E0] text-white" : "text-[#0f172a] hover:bg-gray-100"}`}>
+                  <span className="flex-none">{item.icon}</span>
+                  {!collapsed && <span className="text-sm">{item.name}</span>}
+                </Link>
+              ))
+          ) : (
+            <div className="text-sm text-gray-500 px-3 py-2">Connectez-vous pour voir la navigation.</div>
+          )}
+        </nav>
+
+        <div className="p-3 border-t">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-white" style={{ background: "#D71920" }} title={user?.username}>
+              {user?.avatarUrl ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full rounded-full object-cover" /> : avatarInitials(user)}
+            </div>
+
+            {!collapsed && (
+              <div className="flex-1">
+                <div className="text-sm font-medium">{user?.username ?? "Invité"}</div>
+                <div className="text-xs text-gray-600">{user?.role?.name ?? "—"}</div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button size="sm" variant="ghost" onClick={handleLogout} title="Se déconnecter">
+                <LucideLogOut className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <div className="flex-1 flex flex-col">
+        <header className="flex items-center justify-between px-6 py-3 shadow-sm" style={{ background: "#ffffff" }}>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4">
+              <h1 className="text-lg font-semibold">
+                {navItems.find((item) => item.path === location.pathname)?.name || "Dashboard"}
+              </h1>
+
+              <div className="hidden md:flex items-center gap-2 ml-4">
+                <Button size="sm" variant="outline" className="flex items-center gap-2" onClick={() => window.location.reload()}>
+                  <LucideRefreshCw className="w-4 h-4" /> Rafraîchir
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {loadingProfile ? (
+              <div className="text-sm text-gray-500">Chargement profil…</div>
+            ) : authError ? (
+              <div className="text-sm text-red-600">Profil: {authError}</div>
+            ) : (
+              <>
+                <div className="hidden sm:flex items-center gap-3">
+                  <span className="text-sm">{user?.username ?? "Invité"}</span>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold" style={{ background: "#00A3E0", color: "white" }}>
+                    {avatarInitials(user)}
+                  </div>
+                </div>
+
+                <Button variant="destructive" size="sm" onClick={handleLogout} className="flex items-center gap-2">
+                  <LucideLogOut className="w-4 h-4" /> Déconnexion
+                </Button>
+              </>
+            )}
+          </div>
+        </header>
+
+        <main className="flex-1 p-6 overflow-auto bg-[#F1F3F5]">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default DashboardLayout;

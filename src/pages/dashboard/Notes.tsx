@@ -1,0 +1,435 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import * as XLSX from "xlsx";
+// @ts-ignore
+import { saveAs } from "file-saver";
+
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { LucideEdit, LucideTrash2, LucideRefreshCw, LucideDownload } from "lucide-react";
+
+interface Filiere { id: number; nom: string; }
+interface Promotion { id: number; nom?: string; annee?: number; filiereId?: number | null; filiere?: Filiere | null; }
+interface ModuleType { id: string; nom?: string; title?: string; code?: string; promotionId?: number | null; promotion?: Promotion | null; }
+interface Student { id: string; matricule?: string; nom: string; prenom?: string; promotionId?: number | null; promotion?: Promotion | null; }
+interface NoteItem {
+  id: string;
+  studentId: string;
+  moduleId: string;
+  ce?: number | null;
+  fe?: number | null;
+  score?: number | null;
+  session?: string;
+  semester?: number;
+  appreciation?: string | null;
+  student?: Student | null;
+  module?: ModuleType | null;
+}
+
+const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) => (
+  <select {...props} className="border rounded px-2 py-2 w-full">
+    {props.children}
+  </select>
+);
+
+const Notes: React.FC = () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+  const [notes, setNotes] = useState<NoteItem[]>([]);
+  const [modules, setModules] = useState<ModuleType[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [filieres, setFilieres] = useState<Filiere[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [promotionId, setPromotionId] = useState<string | "all">("all");
+  const [moduleId, setModuleId] = useState<string | "all">("all");
+  const [session, setSession] = useState<string | "all">("all");
+  const [semester, setSemester] = useState<string | "">("");
+
+  const [showForm, setShowForm] = useState(false);
+  const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
+  const [form, setForm] = useState({
+    studentId: "",
+    moduleId: "",
+    ce: "",
+    fe: "",
+    session: "Normale",
+    semester: "1",
+    appreciation: "",
+  });
+
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // -------------------------------
+  // Initial load
+  // -------------------------------
+  useEffect(() => {
+    fetchAllStatic();
+    fetchNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fetch when filters / search change (debounced)
+  useEffect(() => {
+    const t = setTimeout(() => fetchNotes(), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, promotionId, moduleId, session, semester]);
+
+  // -------------------------------
+  // FETCHERS
+  // -------------------------------
+  const fetchAllStatic = async () => {
+    try {
+      const [mRes, sRes, pRes, fRes] = await Promise.all([
+        axios.get("http://localhost:5000/api/modules", { headers }),
+        axios.get("http://localhost:5000/api/students", { headers }),
+        axios.get("http://localhost:5000/api/promotions", { headers }),
+        axios.get("http://localhost:5000/api/filieres", { headers }),
+      ]);
+
+      setModules(Array.isArray(mRes.data?.data) ? mRes.data.data : Array.isArray(mRes.data) ? mRes.data : []);
+      setStudents(Array.isArray(sRes.data?.data) ? sRes.data.data : Array.isArray(sRes.data) ? sRes.data : []);
+      setPromotions(Array.isArray(pRes.data?.data) ? pRes.data.data : Array.isArray(pRes.data) ? pRes.data : []);
+      setFilieres(Array.isArray(fRes.data?.data) ? fRes.data.data : Array.isArray(fRes.data) ? fRes.data : []);
+    } catch (err) {
+      console.error("fetchAllStatic error:", err);
+      setErrorMsg("Impossible de charger les données statiques (modules / étudiants / promotions / filières).");
+    }
+  };
+
+  const fetchNotes = async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const params: any = {};
+      if (search) params.search = search;
+      if (promotionId !== "all") params.promotionId = promotionId;
+      if (moduleId !== "all") params.moduleId = moduleId;
+      if (session !== "all") params.session = session;
+      if (semester) params.semester = semester;
+
+      const res = await axios.get("http://localhost:5000/api/notes", { headers, params });
+      const data = Array.isArray(res.data?.data)
+        ? res.data.data
+        : Array.isArray(res.data)
+        ? res.data
+        : [];
+      setNotes(data);
+    } catch (err: any) {
+      console.error("fetchNotes error:", err);
+      setErrorMsg(err?.response?.data?.message || "Erreur lors du chargement des notes");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // -------------------------------
+  // FORM LOGIC
+  // -------------------------------
+  const openAddForm = () => {
+    setEditingNote(null);
+    setForm({
+      studentId: students[0]?.id ?? "",
+      moduleId: modules[0]?.id ?? "",
+      ce: "",
+      fe: "",
+      session: "Normale",
+      semester: "1",
+      appreciation: "",
+    });
+    setShowForm(true);
+  };
+
+  const openEditForm = (n: NoteItem) => {
+    setEditingNote(n);
+    setForm({
+      studentId: n.studentId,
+      moduleId: n.moduleId,
+      ce: n.ce !== undefined && n.ce !== null ? String(n.ce) : "",
+      fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
+      session: n.session ?? "Normale",
+      semester: n.semester ? String(n.semester) : "1",
+      appreciation: n.appreciation ?? "",
+    });
+    setShowForm(true);
+  };
+
+  const handleSubmit = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const payload = {
+      studentId: form.studentId,
+      moduleId: form.moduleId,
+      ce: form.ce === "" ? 0 : parseFloat(form.ce),
+      fe: form.fe === "" ? 0 : parseFloat(form.fe),
+      session: form.session,
+      semester: parseInt(form.semester || "1", 10),
+      appreciation: form.appreciation,
+    };
+
+    try {
+      if (editingNote) {
+        await axios.put(`http://localhost:5000/api/notes/${editingNote.id}`, payload, { headers });
+        setSuccessMsg("Note mise à jour avec succès");
+      } else {
+        await axios.post("http://localhost:5000/api/notes", payload, { headers });
+        setSuccessMsg("Note ajoutée avec succès");
+      }
+      setShowForm(false);
+      fetchNotes();
+    } catch (err: any) {
+      console.error("submit note error:", err);
+      setErrorMsg(err?.response?.data?.message || "Erreur lors de l'enregistrement de la note");
+    }
+  };
+
+  const deleteNote = async (id: string) => {
+    if (!window.confirm("Supprimer cette note ?")) return;
+    try {
+      await axios.delete(`http://localhost:5000/api/notes/${id}`, { headers });
+      setSuccessMsg("Note supprimée");
+      fetchNotes();
+    } catch (err) {
+      console.error("delete note error:", err);
+      setErrorMsg("Erreur lors de la suppression de la note");
+    }
+  };
+
+  // -------------------------------
+  // EXPORT EXCEL
+  // -------------------------------
+  const exportToExcel = () => {
+    const data = notes.map((n) => {
+      const stud = n.student;
+      const mod = n.module;
+      const promotion = stud?.promotion ?? promotions.find((p) => p.id === stud?.promotionId);
+      const filiere = filieres.find((f) => f.id === promotion?.filiereId);
+
+      return {
+        Étudiant: `${stud?.nom ?? ""} ${stud?.prenom ?? ""}`.trim(),
+        Matricule: stud?.matricule ?? "",
+        Filière: filiere?.nom ?? "-",
+        Promotion: promotion?.nom ?? "-",
+        Module: moduleLabel(mod),
+        CE: n.ce ?? "",
+        FE: n.fe ?? "",
+        Score: n.score ?? "",
+        Session: n.session ?? "",
+        Semestre: n.semester ?? "",
+        Appréciation: n.appreciation ?? "",
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Notes");
+    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([wbout], { type: "application/octet-stream" });
+    saveAs(blob, `notes_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  // -------------------------------
+  // HELPERS
+  // -------------------------------
+  const moduleLabel = (m?: ModuleType | null) => (m ? m.nom ?? m.title ?? m.code ?? m.id : "-");
+
+  const filiereNameFromNote = (n: NoteItem) => {
+    const promotion = n.student?.promotion ?? promotions.find((p) => p.id === n.student?.promotionId);
+    const fil = filieres.find((f) => f.id === promotion?.filiereId);
+    return fil?.nom ?? "-";
+  };
+
+  // -------------------------------
+  // RENDER
+  // -------------------------------
+  return (
+    <div className="p-6 space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Notes des Elèves Officiers</h2>
+        <div className="flex gap-2">
+          <Button onClick={openAddForm}>Ajouter une note</Button>
+          <Button onClick={fetchNotes} variant="outline">
+            <LucideRefreshCw className="w-4 h-4 mr-1" /> Actualiser
+          </Button>
+          <Button onClick={exportToExcel} variant="ghost">
+            <LucideDownload className="w-4 h-4 mr-1" /> Exporter Excel
+          </Button>
+        </div>
+      </div>
+
+      {errorMsg && <p className="text-red-600">{errorMsg}</p>}
+      {successMsg && <p className="text-green-600">{successMsg}</p>}
+
+      {/* Filtres */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+        <Input placeholder="Recherche (étudiant / module)..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Select value={promotionId} onChange={(e) => setPromotionId(e.target.value)}>
+          <option value="all">Toutes promotions</option>
+          {promotions.map((p) => (
+            <option key={p.id} value={String(p.id)}>
+              {p.nom ?? `Promotion ${p.id}`}
+            </option>
+          ))}
+        </Select>
+        <Select value={moduleId} onChange={(e) => setModuleId(e.target.value)}>
+          <option value="all">Tous modules</option>
+          {modules.map((m) => (
+            <option key={m.id} value={m.id}>
+              {moduleLabel(m)}
+            </option>
+          ))}
+        </Select>
+        <Select value={session} onChange={(e) => setSession(e.target.value)}>
+          <option value="all">Toutes sessions</option>
+          <option value="Normale">Normale</option>
+          <option value="Rattrapage">Rattrapage</option>
+        </Select>
+        <Select value={semester} onChange={(e) => setSemester(e.target.value)}>
+          <option value="">Tous semestres</option>
+          <option value="1">Semestre 1</option>
+          <option value="2">Semestre 2</option>
+        </Select>
+      </div>
+
+      {/* TABLE */}
+      <div className="overflow-x-auto bg-white rounded border">
+        <table className="min-w-full text-sm text-center border-collapse">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-2 py-1 border">Elève Officier</th>
+              <th className="px-2 py-1 border">Matricule</th>
+              <th className="px-2 py-1 border">Filière</th>
+              <th className="px-2 py-1 border">Promotion</th>
+              <th className="px-2 py-1 border">Module</th>
+              <th className="px-2 py-1 border">CE (40%)</th>
+              <th className="px-2 py-1 border">FE (60%)</th>
+              <th className="px-2 py-1 border">Score</th>
+              <th className="px-2 py-1 border">Appréciation</th>
+              <th className="px-2 py-1 border">Session</th>
+              <th className="px-2 py-1 border">Semestre</th>
+              <th className="px-2 py-1 border">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={12} className="py-4">Chargement...</td></tr>
+            ) : notes.length === 0 ? (
+              <tr><td colSpan={12} className="py-4 text-gray-500">Aucune note trouvée</td></tr>
+            ) : (
+              notes.map((n) => (
+                <tr key={n.id} className="hover:bg-gray-50">
+                  <td className="px-2 py-1">{n.student?.nom} {n.student?.prenom}</td>
+                  <td className="px-2 py-1">{n.student?.matricule ?? "-"}</td>
+                  <td className="px-2 py-1">{filiereNameFromNote(n)}</td>
+                  <td className="px-2 py-1">
+                    {n.student?.promotion?.nom ?? promotions.find((p) => p.id === n.student?.promotionId)?.nom ?? "-"}
+                  </td>
+                  <td className="px-2 py-1">{moduleLabel(n.module)}</td>
+                  <td className="px-2 py-1">{n.ce ?? "-"}</td>
+                  <td className="px-2 py-1">{n.fe ?? "-"}</td>
+                  <td className="px-2 py-1">{n.score ?? "-"}</td>
+                  <td className="px-2 py-1">{n.appreciation ?? "-"}</td>
+                  <td className="px-2 py-1">{n.session ?? "-"}</td>
+                  <td className="px-2 py-1">{n.semester ?? "-"}</td>
+                  <td className="px-2 py-1 flex gap-2 justify-center">
+                    <button
+                      title="Modifier"
+                      onClick={() => openEditForm(n)}
+                      className="p-2 border rounded hover:bg-gray-100"
+                      aria-label="Modifier note"
+                    >
+                      <LucideEdit className="w-4 h-4" />
+                    </button>
+                    <button
+                      title="Supprimer"
+                      onClick={() => deleteNote(n.id)}
+                      className="p-2 border rounded bg-red-500 text-white hover:opacity-90"
+                      aria-label="Supprimer note"
+                    >
+                      <LucideTrash2 className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* FORM MODAL */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+          <div className="bg-white p-6 rounded-lg w-full max-w-lg shadow-lg">
+            <h3 className="text-lg font-semibold mb-4">{editingNote ? "Modifier la note" : "Ajouter une note"}</h3>
+
+            <div className="grid grid-cols-1 gap-2">
+              <label className="text-sm">Étudiant</label>
+              <Select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>
+                <option value="">-- Choisir un étudiant --</option>
+                {students.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nom} {s.prenom} ({s.matricule ?? "—"})
+                  </option>
+                ))}
+              </Select>
+
+              <label className="text-sm">Module</label>
+              <Select value={form.moduleId} onChange={(e) => setForm({ ...form, moduleId: e.target.value })}>
+                <option value="">-- Choisir un module --</option>
+                {modules.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {moduleLabel(m)}
+                  </option>
+                ))}
+              </Select>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-sm">CE (40%)</label>
+                  <Input type="number" step="0.01" value={form.ce} onChange={(e) => setForm({ ...form, ce: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-sm">FE (60%)</label>
+                  <Input type="number" step="0.01" value={form.fe} onChange={(e) => setForm({ ...form, fe: e.target.value })} />
+                </div>
+              </div>
+
+              <label className="text-sm">Session</label>
+              <Select value={form.session} onChange={(e) => setForm({ ...form, session: e.target.value })}>
+                <option value="Normale">Normale</option>
+                <option value="Rattrapage">Rattrapage</option>
+              </Select>
+
+              <label className="text-sm">Semestre</label>
+              <Select value={form.semester} onChange={(e) => setForm({ ...form, semester: e.target.value })}>
+                <option value="1">Semestre 1</option>
+                <option value="2">Semestre 2</option>
+              </Select>
+
+              <label className="text-sm">Appréciation</label>
+              <textarea
+                className="border rounded px-2 py-2 w-full"
+                rows={3}
+                value={form.appreciation}
+                onChange={(e) => setForm({ ...form, appreciation: e.target.value })}
+              />
+
+              <div className="flex gap-2 justify-end mt-3">
+                <Button onClick={handleSubmit}>{editingNote ? "Modifier" : "Enregistrer"}</Button>
+                <Button variant="outline" onClick={() => setShowForm(false)}>Annuler</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Notes;
