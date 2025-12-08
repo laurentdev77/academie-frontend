@@ -6,23 +6,16 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "src")
-    }
+      "@": path.resolve(__dirname, "src"),
+    },
   },
   build: {
     sourcemap: false,
     rollupOptions: {
-      external: [
-        "@fullcalendar/core",
-        "@fullcalendar/core/index.js",
-        "@fullcalendar/core/internal",
-        "@fullcalendar/react",
-        "@fullcalendar/daygrid",
-        "@fullcalendar/timegrid",
-        "@fullcalendar/interaction",
-        "@fullcalendar/list",
-        "@fullcalendar/rrule"
-      ]
-    }
-  }
+      external: [], // on vide totalement les externals
+    },
+    commonjsOptions: {
+      include: [/node_modules/], // oblige la bundlisation
+    },
+  },
 });
