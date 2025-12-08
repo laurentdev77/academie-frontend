@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL || "";
+// ✅ Sécurisation API (évite erreurs Render)
+const API =
+  import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
+  "https://academie-backend-2.onrender.com/api";
 
 // 🔐 token
 const auth = () => {
@@ -41,6 +44,8 @@ interface Presence {
   motif?: string;
 }
 
+// --------------------------------------------------------------------
+
 export default function PresenceEnseignant() {
   const [modules, setModules] = useState<Module[]>([]);
   const [selectedModule, setSelectedModule] = useState<Module | null>(null);
@@ -66,10 +71,12 @@ export default function PresenceEnseignant() {
   const pickArray = (res: any, keys: string[]) => {
     if (!res) return [];
     if (Array.isArray(res)) return res;
+
     if (res.data) {
       if (Array.isArray(res.data)) return res.data;
       for (const k of keys) if (Array.isArray(res.data[k])) return res.data[k];
     }
+
     for (const k of keys) if (Array.isArray(res[k])) return res[k];
     return [];
   };
@@ -89,9 +96,10 @@ export default function PresenceEnseignant() {
   // ---- LOAD SEANCES ----
   const loadSeances = async (moduleId: string) => {
     try {
-      const res = await axios.get(`${API}/presence/seances/by-module/${moduleId}`, {
-        headers: auth(),
-      });
+      const res = await axios.get(
+        `${API}/presence/seances/by-module/${moduleId}`,
+        { headers: auth() }
+      );
       const final = pickArray(res.data, ["seances"]);
       setSeances(final);
     } catch (e) {
@@ -105,9 +113,10 @@ export default function PresenceEnseignant() {
     try {
       if (!promotionId) return setStudents([]);
 
-      const res = await axios.get(`${API}/students/by-promotion/${promotionId}`, {
-        headers: auth(),
-      });
+      const res = await axios.get(
+        `${API}/students/by-promotion/${promotionId}`,
+        { headers: auth() }
+      );
       setStudents(pickArray(res.data, ["students"]));
     } catch (e) {
       console.error("loadStudents error:", e);
@@ -170,12 +179,16 @@ export default function PresenceEnseignant() {
       }
     } catch (e) {
       console.error("createSeance error:", e);
-      alert("Erreur création séance (voir console).");
+      alert("Erreur création séance.");
     }
   };
 
   // ---- UPDATE PRESENCE ----
-  const updatePresence = async (studentId: string, statut: string, motif = "") => {
+  const updatePresence = async (
+    studentId: string,
+    statut: string,
+    motif = ""
+  ) => {
     if (!selectedSeance || !selectedModule) return;
 
     try {
@@ -227,7 +240,7 @@ export default function PresenceEnseignant() {
     }
   };
 
-  // ---- MODIFIER SÉANCE (API) ----
+  // ---- MODIFIER SÉANCE ----
   const saveEditedSeance = async () => {
     if (!selectedSeance) return;
 
@@ -278,10 +291,14 @@ export default function PresenceEnseignant() {
     loadModules();
   }, []);
 
-  const moduleLabel = (m: Module) => m.nom ?? m.title ?? m.code ?? m.id;
-  const seanceLabel = (s: Seance) =>
-    `${s.titre ?? "Séance"} - ${s.date} (${s.heureDebut} → ${s.heureFin})`;
+  const moduleLabel = (m: Module) =>
+    m.nom ?? m.title ?? m.code ?? m.id;
 
+  const seanceLabel = (s: Seance) =>
+    `${s.titre ?? "Séance"} - ${s.date} (${
+      s.heureDebut ?? "?" } → ${s.heureFin ?? "?" })`;
+
+  // --------------------------------------------------------------------
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold mb-4">Gestion des présences</h2>
@@ -446,7 +463,9 @@ export default function PresenceEnseignant() {
               type="date"
               className="border p-2 w-full mb-3"
               value={editForm.date}
-              onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+              onChange={(e) =>
+                setEditForm({ ...editForm, date: e.target.value })
+              }
             />
 
             <label className="block mb-2">Titre :</label>
@@ -454,7 +473,9 @@ export default function PresenceEnseignant() {
               type="text"
               className="border p-2 w-full mb-3"
               value={editForm.titre}
-              onChange={(e) => setEditForm({ ...editForm, titre: e.target.value })}
+              onChange={(e) =>
+                setEditForm({ ...editForm, titre: e.target.value })
+              }
             />
 
             <label className="block mb-2">Heure de début :</label>
