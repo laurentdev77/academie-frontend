@@ -4,8 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, PlusCircle, Edit3, Trash2 } from "lucide-react";
 import api from "@/lib/axiosConfig";
-import type { Seance, UUID } from "@/pages/dashboard/PresenceEnseignant";
-import { Dialog } from "@/components/ui/dialog"; // use your project's Dialog; you provided a simple Dialog earlier
+import { Dialog } from "@/components/ui/dialog";
+
+// 🔥 Interface recréée localement
+interface Seance {
+  id: string | number;
+  titre?: string;
+  date?: string;
+  heureDebut?: string | null;
+  heureFin?: string | null;
+  moduleId?: string | number;
+}
 
 interface Props {
   modules: any[];
@@ -27,13 +36,12 @@ export default function SeanceManager({
   onSelectSeance,
   onRefreshSeances,
   setInfo,
-  setError,
+  setError
 }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editing, setEditing] = useState<Seance | null>(null);
 
-  // create form state
   const [titre, setTitre] = useState("");
   const [date, setDate] = useState("");
   const [heureDebut, setHeureDebut] = useState("");
@@ -70,14 +78,10 @@ export default function SeanceManager({
 
   async function submitSeance(e?: React.FormEvent) {
     if (e) e.preventDefault();
-    if (!selectedModule) {
-      setError("Sélectionnez un module d'abord.");
-      return;
-    }
-    if (!titre || !date || !heureDebut) {
-      setError("Remplissez le titre, la date et l'heure de début.");
-      return;
-    }
+
+    if (!selectedModule) return setError("Sélectionnez un module d'abord.");
+    if (!titre || !date || !heureDebut) return setError("Remplissez les champs obligatoires.");
+
     setSaving(true);
     setError(null);
     setInfo(null);
@@ -89,37 +93,35 @@ export default function SeanceManager({
           date,
           heureDebut,
           heureFin: heureFin || null,
-          moduleId: selectedModule,
+          moduleId: selectedModule
         });
         setInfo("Séance créée.");
       } else if (showEdit && editing) {
-        // close modal first to avoid portal race
         closeAllModals();
         await new Promise((r) => setTimeout(r, 50));
+
         await api.patch(`/seances/${editing.id}`, {
           titre,
           date,
           heureDebut,
-          heureFin: heureFin || null,
+          heureFin: heureFin || null
         });
+
         setInfo("Séance modifiée.");
       }
-      // refresh seances
+
       onRefreshSeances();
       closeAllModals();
     } catch (err: any) {
-      console.error("Erreur création/modif séance:", err);
-      if (err?.response?.status === 401) setError("Non authentifié. Connectez-vous.");
-      else setError(err?.response?.data?.message || err?.message || "Erreur lors de la création/modification.");
+      console.error("Erreur création/modification séance:", err);
+      setError(err?.response?.data?.message || err?.message || "Erreur lors de la création/modification.");
     } finally {
       setSaving(false);
     }
   }
 
   async function confirmDeleteSeance(seanceId: string) {
-    // close any open modal first (prevent portal race)
     closeAllModals();
-    // small delay to allow portal to unmount properly
     await new Promise((r) => setTimeout(r, 60));
 
     if (!window.confirm("Voulez-vous vraiment supprimer cette séance ?")) return;
@@ -127,18 +129,19 @@ export default function SeanceManager({
     setDeletingId(seanceId);
     setError(null);
     setInfo(null);
+
     try {
       await api.delete(`/seances/${seanceId}`);
       setInfo("Séance supprimée.");
-      // if deleted was selected, clear selection after a small delay (avoid react unmount portal race)
+
       if (String(selectedSeance) === String(seanceId)) {
         setTimeout(() => onSelectSeance(""), 80);
       }
+
       onRefreshSeances();
     } catch (err: any) {
       console.error("Erreur suppression séance:", err);
-      if (err?.response?.status === 401) setError("Non authentifié. Connectez-vous.");
-      else setError(err?.response?.data?.message || err?.message || "Erreur lors de la suppression.");
+      setError(err?.response?.data?.message || err?.message || "Erreur lors de la suppression.");
     } finally {
       setDeletingId(null);
     }
@@ -150,12 +153,11 @@ export default function SeanceManager({
     <Card>
       <CardHeader className="flex items-center justify-between">
         <CardTitle>Séances</CardTitle>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={openCreateModal} title="Créer une séance">
-            <PlusCircle className="mr-2" /> Créer
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={openCreateModal}>
+          <PlusCircle className="mr-2" /> Créer
+        </Button>
       </CardHeader>
+
       <CardContent>
         {loadingSeances ? (
           <div className="flex items-center gap-2">
@@ -165,7 +167,7 @@ export default function SeanceManager({
         ) : hasNoSeances ? (
           <div>
             <p>Aucune séance pour ce module.</p>
-            <p className="text-sm text-muted-foreground">Créez-en une via "Créer".</p>
+            <p className="text-sm text-muted-foreground">Créez-en une via le bouton.</p>
           </div>
         ) : (
           <div className="flex gap-3 items-center">
@@ -186,7 +188,7 @@ export default function SeanceManager({
               </Select>
             </div>
 
-            {selectedSeance ? (
+            {selectedSeance && (
               <>
                 <Button
                   variant="outline"
@@ -198,6 +200,7 @@ export default function SeanceManager({
                 >
                   <Edit3 className="mr-2" /> Modifier
                 </Button>
+
                 <Button
                   variant="destructive"
                   size="sm"
@@ -207,78 +210,10 @@ export default function SeanceManager({
                   <Trash2 className="mr-2" /> {deletingId ? "Suppression..." : "Supprimer"}
                 </Button>
               </>
-            ) : null}
+            )}
           </div>
         )}
       </CardContent>
-
-      {/* Create Modal */}
-      <Dialog open={showCreate} onOpenChange={(o) => setShowCreate(o)}>
-        <div className="w-full max-w-lg rounded bg-white p-6 shadow-lg">
-          <h3 className="text-lg font-semibold mb-4">Créer une séance</h3>
-          <form onSubmit={submitSeance} className="space-y-3">
-            <div>
-              <label className="block mb-1 text-sm font-medium">Intitulé</label>
-              <input value={titre} onChange={(e) => setTitre(e.target.value)} className="w-full rounded border px-2 py-1" />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium">Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded border px-2 py-1" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block mb-1 text-sm font-medium">Heure début</label>
-                <input type="time" value={heureDebut} onChange={(e) => setHeureDebut(e.target.value)} className="w-full rounded border px-2 py-1" />
-              </div>
-              <div>
-                <label className="block mb-1 text-sm font-medium">Heure fin</label>
-                <input type="time" value={heureFin} onChange={(e) => setHeureFin(e.target.value)} className="w-full rounded border px-2 py-1" />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setShowCreate(false)} disabled={saving}>Annuler</Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? <Loader2 className="animate-spin mr-2" /> : null}Créer
-              </Button>
-            </div>
-          </form>
-        </div>
-      </Dialog>
-
-      {/* Edit Modal */}
-      <Dialog open={showEdit} onOpenChange={(o) => setShowEdit(o)}>
-        <div className="w-full max-w-lg rounded bg-white p-6 shadow-lg">
-          <h3 className="text-lg font-semibold mb-4">Modifier la séance</h3>
-          <form onSubmit={submitSeance} className="space-y-3">
-            <div>
-              <label className="block mb-1 text-sm font-medium">Intitulé</label>
-              <input value={titre} onChange={(e) => setTitre(e.target.value)} className="w-full rounded border px-2 py-1" />
-            </div>
-            <div>
-              <label className="block mb-1 text-sm font-medium">Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full rounded border px-2 py-1" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block mb-1 text-sm font-medium">Heure début</label>
-                <input type="time" value={heureDebut} onChange={(e) => setHeureDebut(e.target.value)} className="w-full rounded border px-2 py-1" />
-              </div>
-              <div>
-                <label className="block mb-1 text-sm font-medium">Heure fin</label>
-                <input type="time" value={heureFin} onChange={(e) => setHeureFin(e.target.value)} className="w-full rounded border px-2 py-1" />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setShowEdit(false)} disabled={saving}>Annuler</Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? <Loader2 className="animate-spin mr-2" /> : null}Enregistrer
-              </Button>
-            </div>
-          </form>
-        </div>
-      </Dialog>
     </Card>
   );
 }

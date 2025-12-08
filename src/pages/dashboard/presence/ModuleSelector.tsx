@@ -1,7 +1,21 @@
 import React from "react";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { TeacherModule } from "@/pages/dashboard/PresenceEnseignant";
+
+// 🔥 On REMPLACE l'ancien import cassé par une interface locale
+interface TeacherModule {
+  id: string | number;
+  title?: string;
+  code?: string;
+  promotion?: { nom?: string };
+}
 
 interface Props {
   modules: TeacherModule[];
@@ -10,7 +24,12 @@ interface Props {
   onSelect: (id: string) => void;
 }
 
-export default function ModuleSelector({ modules, loading, selectedModule, onSelect }: Props) {
+export default function ModuleSelector({
+  modules,
+  loading,
+  selectedModule,
+  onSelect
+}: Props) {
   const safeModules = modules ?? [];
 
   if (loading) {
@@ -26,7 +45,9 @@ export default function ModuleSelector({ modules, loading, selectedModule, onSel
     return (
       <div>
         <p>Aucun module attribué à votre compte.</p>
-        <p className="text-sm text-muted-foreground">Contactez l'administrateur si nécessaire.</p>
+        <p className="text-sm text-muted-foreground">
+          Contactez l'administrateur si nécessaire.
+        </p>
       </div>
     );
   }
@@ -41,8 +62,9 @@ export default function ModuleSelector({ modules, loading, selectedModule, onSel
           <SelectGroup>
             {safeModules.map((m) => (
               <SelectItem key={String(m.id)} value={String(m.id)}>
-                {m.title} — {m.code}
-                {m.promotion ? ` (${m.promotion.nom})` : ""}
+                {m.title || m.code || "Module"}{" "}
+                {m.code ? `(${m.code})` : ""}
+                {m.promotion?.nom ? ` — ${m.promotion.nom}` : ""}
               </SelectItem>
             ))}
           </SelectGroup>

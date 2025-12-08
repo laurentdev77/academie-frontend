@@ -1,8 +1,19 @@
 import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save } from "lucide-react";
-import type { StudentPresence } from "@/pages/dashboard/PresenceEnseignant";
 import api from "@/lib/axiosConfig";
+
+// 🔥 On recrée l’interface sans import cassé
+interface StudentPresence {
+  id: string | number;
+  nom?: string;
+  prenom?: string;
+  matricule?: string;
+  presence?: {
+    statut: string | null;
+    motif?: string | null;
+  };
+}
 
 interface Props {
   students: StudentPresence[];
@@ -13,13 +24,21 @@ interface Props {
   onSingleSaved: () => void;
 }
 
-export default function PresenceTable({ students, loading, selectedModule, selectedSeance, onSaveAll, onSingleSaved }: Props) {
+export default function PresenceTable({
+  students,
+  loading,
+  selectedModule,
+  selectedSeance,
+  onSaveAll,
+  onSingleSaved
+}: Props) {
   const [localPresences, setLocalPresences] = useState<Record<string, string>>({});
   const [savingPerStudent, setSavingPerStudent] = useState<Record<string, boolean>>({});
   const [savingAll, setSavingAll] = useState(false);
+
   const safeStudents = students ?? [];
 
-  // init local map when students change
+  // Init for each seance / module change
   React.useEffect(() => {
     const start: Record<string, string> = {};
     safeStudents.forEach((s) => {
@@ -38,13 +57,15 @@ export default function PresenceTable({ students, loading, selectedModule, selec
     if (!selectedSeance) return;
     const statut = localPresences[studentId] ?? "";
     setSavingPerStudent((p) => ({ ...p, [studentId]: true }));
+
     try {
       await api.post("/presences/mark", {
         seanceId: selectedSeance,
         studentId,
         statut: statut || null,
-        motif: null,
+        motif: null
       });
+
       await onSingleSaved();
     } catch (err: any) {
       console.error("Erreur enregistrement présence:", err);
@@ -57,28 +78,39 @@ export default function PresenceTable({ students, loading, selectedModule, selec
   const saveAllPresences = async () => {
     if (!selectedSeance) return;
     setSavingAll(true);
+
     try {
       const payload = Object.entries(localPresences).map(([studentId, statut]) => ({
         seanceId: selectedSeance,
         studentId,
         statut: statut || null,
-        motif: null,
+        motif: null
       }));
-      // try bulk endpoint first
+
+      // Bulk save if supported
       await api.post("/presences/bulk", { presences: payload });
       await onSaveAll();
     } catch (err: any) {
-      console.warn("Bulk failed, trying single requests...", err);
+      console.warn("Bulk failed, trying per-student fallback...", err);
+
       try {
         for (const [studentId, statut] of Object.entries(localPresences)) {
           setSavingPerStudent((p) => ({ ...p, [studentId]: true }));
-          await api.post("/presences/mark", { seanceId: selectedSeance, studentId, statut: statut || null, motif: null });
+
+          await api.post("/presences/mark", {
+            seanceId: selectedSeance,
+            studentId,
+            statut: statut || null,
+            motif: null
+          });
+
           setSavingPerStudent((p) => ({ ...p, [studentId]: false }));
         }
+
         await onSaveAll();
       } catch (err2: any) {
         console.error("Erreur fallback save:", err2);
-        alert(err2?.response?.data?.message || err2?.message || "Erreur enregistrement présences");
+        alert(err2?.response?.data?.message || err2?.message || "Erreur enregistrement");
       }
     } finally {
       setSavingAll(false);
@@ -88,7 +120,12 @@ export default function PresenceTable({ students, loading, selectedModule, selec
   return (
     <div>
       <div className="flex justify-end mb-3">
-        <Button variant="secondary" size="sm" onClick={saveAllPresences} disabled={savingAll || loading || Object.keys(localPresences).length === 0}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={saveAllPresences}
+          disabled={savingAll || loading || Object.keys(localPresences).length === 0}
+        >
           <span className="inline-flex items-center">
             {savingAll ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
             Enregistrer toutes les présences
@@ -102,9 +139,7 @@ export default function PresenceTable({ students, loading, selectedModule, selec
           <span>Chargement des étudiants...</span>
         </div>
       ) : safeStudents.length === 0 ? (
-        <div>
-          <p>Aucun étudiant trouvé pour la promotion de ce module.</p>
-        </div>
+        <div>Aucun étudiant trouvé pour cette promotion.</div>
       ) : (
         <div className="overflow-auto">
           <table className="w-full text-sm">
@@ -117,22 +152,24 @@ export default function PresenceTable({ students, loading, selectedModule, selec
                 <th className="p-2 text-left">Actions</th>
               </tr>
             </thead>
+
             <tbody>
               {safeStudents.map((st) => {
                 const sid = String(st.id);
                 const current = localPresences[sid] ?? "";
                 const isSaving = !!savingPerStudent[sid];
+
                 return (
                   <tr key={sid} className="border-b">
                     <td className="p-2">{st.matricule ?? "-"}</td>
                     <td className="p-2">{st.nom ?? "-"}</td>
                     <td className="p-2">{st.prenom ?? "-"}</td>
+
                     <td className="p-2">
                       <select
                         value={current}
                         onChange={(e) => handleLocalPresenceChange(sid, e.target.value)}
                         className="rounded border px-2 py-1"
-                        aria-label={`Statut ${st.nom ?? sid}`}
                       >
                         <option value="">— Non renseigné —</option>
                         <option value="present">Présent</option>
@@ -140,9 +177,11 @@ export default function PresenceTable({ students, loading, selectedModule, selec
                         <option value="retard">Retard</option>
                       </select>
                     </td>
+
                     <td className="p-2">
                       <Button size="sm" onClick={() => saveSinglePresence(sid)} disabled={isSaving}>
-                        {isSaving ? <Loader2 className="animate-spin mr-2" /> : null}Enregistrer
+                        {isSaving && <Loader2 className="animate-spin mr-2" />}
+                        Enregistrer
                       </Button>
                     </td>
                   </tr>
