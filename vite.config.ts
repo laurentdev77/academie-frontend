@@ -10,9 +10,9 @@ export default defineConfig({
     }
   },
   build: {
+    sourcemap: false,
     rollupOptions: {
-      // Ignore ALL FullCalendar modules — avoids all resolution errors
-      external: (id) => id.startsWith("@fullcalendar/")
+      external: [], // IMPORTANT : ne rien mettre ici !!
     }
   }
 });
