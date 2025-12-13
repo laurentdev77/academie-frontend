@@ -1,12 +1,10 @@
 import axios from "axios";
 
-// 🌍 Base URL backend (SANS /auth)
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+// 🌍 Backend Render
+const API_URL = import.meta.env.VITE_API_URL;
 
-// 🔹 Types
 export interface LoginData {
-  usernameOrEmail: string;
+  usernameOrEmail: string; // ✅ correspond au backend
   password: string;
 }
 
@@ -16,25 +14,24 @@ export interface RegisterData {
   password: string;
 }
 
-// 🟢 Connexion
-export const login = async (data: LoginData) => {
-  const response = await axios.post(
-    `${API_BASE_URL}/auth/login`,
-    data
-  );
+export interface AuthResponse {
+  token: string;
+  user: any;
+}
+
+// 🔐 Connexion
+export const login = async (data: LoginData): Promise<AuthResponse> => {
+  const response = await axios.post(`${API_URL}/login`, data);
   return response.data;
 };
 
-// 🟢 Inscription
-export const register = async (data: RegisterData) => {
-  const response = await axios.post(
-    `${API_BASE_URL}/auth/register`,
-    data
-  );
+// 📝 Inscription
+export const register = async (data: RegisterData): Promise<AuthResponse> => {
+  const response = await axios.post(`${API_URL}/register`, data);
   return response.data;
 };
 
-// 🟡 Déconnexion
+// 🚪 Déconnexion
 export const logout = () => {
   localStorage.removeItem("token");
   localStorage.removeItem("user");
