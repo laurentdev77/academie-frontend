@@ -7,35 +7,38 @@ import { login, LoginData } from "@/lib/authApi";
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const [username, setUsername] = useState(""); // exactement "username"
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isPending, setIsPending] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError("");
-  setIsPending(true);
+    e.preventDefault();
+    setError("");
+    setIsPending(true);
 
-  try {
-    const data: LoginData = { username, password };
-    const response = await login(data);
+    try {
+      const data: LoginData = {
+        usernameOrEmail: username,  // ✔️ important
+        password,
+      };
 
-    localStorage.setItem("token", response.token);
-    localStorage.setItem("user", JSON.stringify(response.user));
+      const response = await login(data);
 
-    // 👉 AJOUT ULTRA IMPORTANT POUR LES RÔLES
-    if (response.user?.role?.name) {
-      localStorage.setItem("role", response.user.role.name.toLowerCase());
+      localStorage.setItem("token", response.token);
+      localStorage.setItem("user", JSON.stringify(response.user));
+
+      if (response.user?.role?.name) {
+        localStorage.setItem("role", response.user.role.name.toLowerCase());
+      }
+
+      navigate("/dashboard");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Erreur de connexion");
+    } finally {
+      setIsPending(false);
     }
-
-    navigate("/dashboard");
-  } catch (err: any) {
-    setError(err.response?.data?.message || "Erreur de connexion");
-  } finally {
-    setIsPending(false);
-  }
-};
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-100 to-gray-200 p-6">
@@ -54,12 +57,12 @@ const Login: React.FC = () => {
         {error && <p className="text-red-500 text-center">{error}</p>}
 
         <div>
-          <label className="block mb-1 font-medium">Nom d'utilisateur</label>
+          <label className="block mb-1 font-medium">Nom d'utilisateur ou Email</label>
           <Input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Nom d'utilisateur"
+            placeholder="Nom d'utilisateur ou email"
             required
             className="w-full"
           />

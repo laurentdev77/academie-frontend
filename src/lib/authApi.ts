@@ -1,11 +1,12 @@
 import axios from "axios";
 
-// 🌍 Base URL du backend
-const API_URL = "http://localhost:5000/api/auth";
+// 🌍 Base URL du backend hébergé (Render)
+// IMPORTANT : localhost ne fonctionne pas en production
+const API_URL = import.meta.env.VITE_API_URL || "https://academie-backend-2.onrender.com/api/auth";
 
 // 🔹 Type pour la connexion
 export interface LoginData {
-  username: string; // doit correspondre exactement au backend
+  usernameOrEmail: string; // correspond au backend
   password: string;
 }
 
@@ -32,4 +33,5 @@ export const register = async (data: RegisterData) => {
 export const logout = () => {
   localStorage.removeItem("token");
   localStorage.removeItem("user");
+  localStorage.removeItem("role");
 };
