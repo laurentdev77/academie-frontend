@@ -1,34 +1,31 @@
-import axios from "axios";
+import api from "./axios";
 
-// 🌍 URL backend Render
-const API_URL = import.meta.env.VITE_API_URL;
-
-// 🔹 Login
 export interface LoginData {
   usernameOrEmail: string;
   password: string;
 }
 
-// 🔹 Register
 export interface RegisterData {
   username: string;
   email: string;
   password: string;
 }
 
-// 🟢 Connexion
+// 🔐 Login
 export const login = async (data: LoginData) => {
-  const response = await axios.post(`${API_URL}/auth/login`, data);
+  const response = await api.post("/auth/login", data);
   return response.data;
 };
 
-// 🟢 Inscription
+// 📝 Register
 export const register = async (data: RegisterData) => {
-  const response = await axios.post(`${API_URL}/auth/register`, data);
+  const response = await api.post("/auth/register", data);
   return response.data;
 };
 
-// 🟡 Logout
+// 🚪 Logout
 export const logout = () => {
-  localStorage.clear();
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("role");
 };
