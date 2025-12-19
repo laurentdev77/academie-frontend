@@ -6,7 +6,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import ScheduleForm from "@/components/forms/ScheduleForm";
 
 import type { ScheduleType } from "@/types/schedule";

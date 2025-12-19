@@ -1,7 +1,7 @@
 // src/components/forms/ScheduleForm.tsx
 
 import React, { useEffect, useMemo, useState } from "react";
-import { api } from "@/lib/api";
+import api from "@/lib/api";
 import type { ScheduleType } from "@/types/schedule";
 import type { ModuleType } from "@/types/module";
 import type { TeacherType } from "@/types/teacher";
