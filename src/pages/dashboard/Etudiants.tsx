@@ -39,9 +39,9 @@ type Student = {
 };
 
 /* API base */
-const API_BASE = (import.meta.env.VITE_API_URL as string) || "http://localhost:5000/api";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-/* Simple Select wrapper to match UI */
+/* Simple Select wrapper */
 const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) => (
   <select {...props} className="border rounded p-2 w-full focus:ring-2 focus:ring-blue-300">
     {props.children}
@@ -52,12 +52,10 @@ export default function Etudiants() {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
-  // Data
   const [filieres, setFilieres] = useState<Filiere[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
 
-  // UI
   const [selectedFiliere, setSelectedFiliere] = useState<number | "">("");
   const [selectedPromotion, setSelectedPromotion] = useState<number | "">("");
   const [filteredPromotions, setFilteredPromotions] = useState<Promotion[]>([]);
@@ -73,7 +71,6 @@ export default function Etudiants() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Form state
   const [form, setForm] = useState({
     matricule: "",
     nom: "",
@@ -94,7 +91,6 @@ export default function Etudiants() {
     fetchFilieres();
     fetchPromotions();
     fetchAllStudents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -148,7 +144,7 @@ export default function Etudiants() {
       setStudents(Array.isArray(res.data) ? res.data : res.data?.data ?? []);
     } catch (err) {
       console.error("fetchStudentsByPromotion:", err);
-      setErrorMsg("Impossible de charger les Elèves Officiers pour la promotion sélectionnée");
+      setErrorMsg("Impossible de charger les Elèves Officiers pour cette promotion");
     } finally {
       setLoading(false);
     }
@@ -237,10 +233,7 @@ export default function Etudiants() {
     saveAs(new Blob([wbout], { type: "application/octet-stream" }), "etudiants.xlsx");
   }
 
-  /* ===== Upload photo =====
-     Route backend: POST ${API_BASE}/students/upload-photo, field name "photo"
-     We upload on file-selection and store returned url in form.photoUrl
-  */
+  /* ===== Upload photo ===== */
   async function handlePhotoUpload(evt: React.ChangeEvent<HTMLInputElement>) {
     const file = evt.target.files?.[0];
     if (!file) return;
@@ -251,12 +244,8 @@ export default function Etudiants() {
         headers: { ...headers, "Content-Type": "multipart/form-data" },
       });
       const url = res.data?.url ?? res.data?.fileUrl ?? null;
-      if (url) {
-        setForm((f) => ({ ...f, photoUrl: url }));
-        setSuccessMsg("Photo téléversée avec succès");
-      } else {
-        setErrorMsg("Aucune URL reçue après upload");
-      }
+      if (url) setForm((f) => ({ ...f, photoUrl: url }));
+      setSuccessMsg(url ? "Photo téléversée avec succès" : "Aucune URL reçue après upload");
     } catch (err) {
       console.error("upload error:", err);
       setErrorMsg("Erreur lors du téléversement de la photo");
@@ -310,7 +299,6 @@ export default function Etudiants() {
 
   async function submitForm() {
     setErrorMsg(null);
-    // required validation (DB constraints)
     if (!form.matricule || !form.nom || !form.promotionId) {
       setErrorMsg("Matricule, Nom et Promotion sont obligatoires.");
       return;
@@ -341,7 +329,6 @@ export default function Etudiants() {
       fetchAllStudents();
     } catch (err: any) {
       console.error("submitForm error:", err);
-      // if backend returns specific error message, surface it
       setErrorMsg(err?.response?.data?.message ?? "Erreur lors de l'enregistrement");
     }
   }
@@ -358,12 +345,12 @@ export default function Etudiants() {
     }
   }
 
-  /* ===== RENDER ===== */
+  /* ===== RENDER JSX complet ===== */
   return (
     <div className="p-6 space-y-6">
+      {/* Header + Actions */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Gestion des Elèves Officiers</h1>
-
         <div className="flex gap-2">
           <Button variant="outline" onClick={exportToPDF}><FileText className="mr-2" />PDF</Button>
           <Button variant="outline" onClick={exportToExcel}><FileSpreadsheet className="mr-2" />Excel</Button>
@@ -376,52 +363,28 @@ export default function Etudiants() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
         <div>
           <label className="block text-sm font-medium mb-1">Filière</label>
-          <Select
-            value={selectedFiliere === "" ? "" : String(selectedFiliere)}
-            onChange={(e) => onSelectFiliere(e.target.value)}
-          >
+          <Select value={selectedFiliere === "" ? "" : String(selectedFiliere)} onChange={(e) => onSelectFiliere(e.target.value)}>
             <option value="">— Toutes les filières —</option>
-            {filieres.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.nom}
-              </option>
-            ))}
+            {filieres.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
           </Select>
         </div>
-
         <div>
           <label className="block text-sm font-medium mb-1">Promotion</label>
-          <Select
-            value={selectedPromotion === "" ? "" : String(selectedPromotion)}
-            onChange={(e) => onSelectPromotion(e.target.value)}
-            disabled={filteredPromotions.length === 0}
-          >
+          <Select value={selectedPromotion === "" ? "" : String(selectedPromotion)} onChange={(e) => onSelectPromotion(e.target.value)} disabled={filteredPromotions.length === 0}>
             <option value="">— Choisir une promotion —</option>
-            {filteredPromotions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nom}
-              </option>
-            ))}
+            {filteredPromotions.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
           </Select>
         </div>
-
         <div className="md:col-span-2">
           <label className="block text-sm font-medium mb-1">Recherche</label>
           <div className="flex gap-2">
-            <Input
-              placeholder="Rechercher (nom, prénom, matricule, email, téléphone...)"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-            />
+            <Input placeholder="Rechercher..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
             <Button variant="ghost" onClick={() => { setSearch(""); setPage(1); }}>Clear</Button>
           </div>
         </div>
       </div>
 
-      {/* messages */}
+      {/* Messages */}
       {successMsg && <div className="text-green-700 bg-green-50 border border-green-100 px-3 py-2 rounded">{successMsg}</div>}
       {errorMsg && <div className="text-red-700 bg-red-50 border border-red-100 px-3 py-2 rounded">{errorMsg}</div>}
 
@@ -449,155 +412,99 @@ export default function Etudiants() {
                   {loading ? "Chargement..." : "Aucun étudiant trouvé"}
                 </td>
               </tr>
-            ) : (
-              paginated.map((s, i) => (
-                <tr key={s.id} className="border-t hover:bg-gray-50">
-                  <td className="px-3 py-2">{(page - 1) * perPage + i + 1}</td>
-                  <td className="px-3 py-2">{s.matricule || "—"}</td>
-                  <td className="px-3 py-2 font-medium">{s.nom}</td>
-                  <td className="px-3 py-2">{s.prenom || "—"}</td>
-                  <td className="px-3 py-2">{s.sexe || "—"}</td>
-                  <td className="px-3 py-2">{s.user?.telephone || "—"}</td>
-                  <td className="px-3 py-2">{s.dateNaissance ? new Date(s.dateNaissance).toLocaleDateString() : "—"}</td>
-                  <td className="px-3 py-2">{s.user?.email || "—"}</td>
-                  <td className="px-3 py-2">{s.promotion?.nom || "—"}</td>
-                  <td className="px-3 py-2 flex gap-2 justify-center">
-                    <Button size="sm" variant="outline" onClick={() => setShowDetails(s)} title="Voir détails">
-                      <Eye />
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => openEditForm(s)} title="Modifier">
-                      <Pencil />
-                    </Button>
-                    <Button size="sm" className="bg-red-600 text-white" onClick={() => deleteStudent(s.id)} title="Supprimer">
-                      <Trash2 />
-                    </Button>
-                  </td>
-                </tr>
-              ))
-            )}
+            ) : paginated.map((s, i) => (
+              <tr key={s.id} className="border-t hover:bg-gray-50">
+                <td className="px-3 py-2">{(page - 1) * perPage + i + 1}</td>
+                <td className="px-3 py-2">{s.matricule || "—"}</td>
+                <td className="px-3 py-2 font-medium">{s.nom}</td>
+                <td className="px-3 py-2">{s.prenom || "—"}</td>
+                <td className="px-3 py-2">{s.sexe || "—"}</td>
+                <td className="px-3 py-2">{s.user?.telephone || "—"}</td>
+                <td className="px-3 py-2">{s.dateNaissance ? new Date(s.dateNaissance).toLocaleDateString() : "—"}</td>
+                <td className="px-3 py-2">{s.user?.email || "—"}</td>
+                <td className="px-3 py-2">{s.promotion?.nom || "—"}</td>
+                <td className="px-3 py-2 flex gap-2 justify-center">
+                  <Button size="sm" variant="outline" onClick={() => openEditForm(s)}><Pencil size={14} /></Button>
+                  <Button size="sm" variant="destructive" onClick={() => deleteStudent(s.id)}><Trash2 size={14} /></Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowDetails(s)}><Eye size={14} /></Button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between mt-3">
-        <div className="text-sm text-gray-600">{searchableStudentsCount(search, students, filteredPromotions)} résultat(s)</div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Préc</Button>
-          <span className="px-2">Page {page} / {totalPages}</span>
-          <Button variant="outline" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Suiv</Button>
+      {totalPages > 1 && (
+        <div className="flex gap-2 justify-center items-center mt-4">
+          <Button variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>Précédent</Button>
+          <span>Page {page} / {totalPages}</span>
+          <Button variant="outline" disabled={page === totalPages} onClick={() => setPage(page + 1)}>Suivant</Button>
         </div>
-      </div>
+      )}
 
-      {/* FORM modal */}
+      {/* Formulaire Add/Edit */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white w-full max-w-lg p-6 rounded shadow-lg">
-            <h3 className="text-lg font-semibold mb-3">{editing ? "Modifier l'Elève Officier" : "Ajouter un Elève Officier"}</h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              <Input placeholder="Matricule *" value={form.matricule} onChange={(e) => setForm({ ...form, matricule: e.target.value })} />
-              <Input placeholder="Nom *" value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} />
-              <Input placeholder="Prénom" value={form.prenom} onChange={(e) => setForm({ ...form, prenom: e.target.value })} />
-              <Select value={form.sexe} onChange={(e) => setForm({ ...form, sexe: e.target.value })}>
-                <option value="">-- Sexe --</option>
-                <option value="M">Masculin</option>
-                <option value="F">Féminin</option>
-                <option value="Autre">Autre</option>
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-start pt-20 z-50">
+          <div className="bg-white rounded shadow-lg p-6 w-full max-w-2xl">
+            <h2 className="text-xl font-bold mb-4">{editing ? "Modifier" : "Ajouter"} un Elève Officier</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input placeholder="Matricule" value={form.matricule} onChange={(e) => setForm({...form, matricule: e.target.value})} />
+              <Input placeholder="Nom" value={form.nom} onChange={(e) => setForm({...form, nom: e.target.value})} />
+              <Input placeholder="Prénom" value={form.prenom} onChange={(e) => setForm({...form, prenom: e.target.value})} />
+              <Input placeholder="Grade" value={form.grade} onChange={(e) => setForm({...form, grade: e.target.value})} />
+              <Select value={form.sexe} onChange={(e) => setForm({...form, sexe: e.target.value})}>
+                <option value="">— Sexe —</option>
+                <option value="Masculin">Masculin</option>
+                <option value="Féminin">Féminin</option>
               </Select>
-
-              <Input type="date" value={form.dateNaissance} onChange={(e) => setForm({ ...form, dateNaissance: e.target.value })} />
-              <Input placeholder="Lieu de naissance" value={form.lieuNaissance} onChange={(e) => setForm({ ...form, lieuNaissance: e.target.value })} />
-
-              <div>
-                <label className="block text-sm mb-1">Photo</label>
-                <div className="flex items-center gap-2">
-                  <input type="file" accept="image/*" onChange={handlePhotoUpload} />
-                  {form.photoUrl ? <img src={form.photoUrl.startsWith("http") ? form.photoUrl : `${API_BASE.replace("/api", "")}${form.photoUrl}`} alt="preview" className="w-12 h-12 object-cover rounded" /> : null}
-                </div>
-              </div>
-
-              <Input placeholder="Grade" value={form.grade} onChange={(e) => setForm({ ...form, grade: e.target.value })} />
-              <Select value={String(form.filiereId || 0)} onChange={(e) => {
-                const id = Number(e.target.value) || 0;
-                setForm({ ...form, filiereId: id, promotionId: null });
-                const fp = promotions.filter((p) => p.filiereId === id);
-                setFilteredPromotions(fp);
+              <Input type="date" placeholder="Date naissance" value={form.dateNaissance} onChange={(e) => setForm({...form, dateNaissance: e.target.value})} />
+              <Input placeholder="Lieu naissance" value={form.lieuNaissance} onChange={(e) => setForm({...form, lieuNaissance: e.target.value})} />
+              <Select value={form.filiereId} onChange={(e) => {
+                const fid = Number(e.target.value);
+                setForm({...form, filiereId: fid, promotionId: null});
+                setFilteredPromotions(promotions.filter(p => p.filiereId === fid));
               }}>
-                <option value={0}>-- Filière --</option>
-                {filieres.map((f) => <option key={f.id} value={f.id}>{f.nom}</option>)}
+                <option value={0}>— Filière —</option>
+                {filieres.map(f => <option key={f.id} value={f.id}>{f.nom}</option>)}
               </Select>
-
-              <Select value={form.promotionId ?? ""} onChange={(e) => setForm({ ...form, promotionId: e.target.value ? Number(e.target.value) : null })}>
-                <option value="">-- Promotion --</option>
-                {filteredPromotions.map((p) => <option key={p.id} value={p.id}>{p.nom}</option>)}
+              <Select value={form.promotionId || ""} onChange={(e) => setForm({...form, promotionId: e.target.value ? Number(e.target.value) : null})}>
+                <option value="">— Promotion —</option>
+                {filteredPromotions.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
               </Select>
-
-              <div className="md:col-span-2 flex gap-2 justify-end mt-4">
-                <Button onClick={submitForm}>{editing ? "Mettre à jour" : "Enregistrer"}</Button>
-                <Button variant="outline" onClick={() => setShowForm(false)}>Annuler</Button>
-              </div>
+              <Input type="file" onChange={handlePhotoUpload} />
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={() => setShowForm(false)}>Annuler</Button>
+              <Button onClick={submitForm}>{editing ? "Modifier" : "Ajouter"}</Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* DETAILS modal */}
+      {/* Détails */}
       {showDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white w-full max-w-2xl p-6 rounded shadow-xl">
-            <div className="flex gap-4">
-              <div className="w-40">
-                {showDetails.photoUrl ? (
-                  <img src={showDetails.photoUrl.startsWith("http") ? showDetails.photoUrl : `${API_BASE.replace("/api", "")}${showDetails.photoUrl}`} alt="photo" className="w-40 h-40 object-cover rounded" />
-                ) : (
-                  <div className="w-40 h-40 bg-gray-100 rounded flex items-center justify-center text-gray-400">Aucune photo</div>
-                )}
-              </div>
-
-              <div className="flex-1">
-                <h3 className="text-xl font-semibold mb-2">{showDetails.nom} {showDetails.prenom ? ` ${showDetails.prenom}` : ""}</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <p><strong>Matricule:</strong> {showDetails.matricule || "—"}</p>
-                  <p><strong>Sexe:</strong> {showDetails.sexe || "—"}</p>
-                  <p><strong>Date Naissance:</strong> {showDetails.dateNaissance ? new Date(showDetails.dateNaissance).toLocaleDateString() : "—"}</p>
-                  <p><strong>Lieu Naissance:</strong> {showDetails.lieuNaissance || "—"}</p>
-                  <p><strong>Email:</strong> {showDetails.user?.email || "—"}</p>
-                  <p><strong>Téléphone:</strong> {showDetails.user?.telephone || "—"}</p>
-                  <p><strong>Grade:</strong> {showDetails.grade || "—"}</p>
-                  <p><strong>État dossier:</strong> {showDetails.etatDossier || "—"}</p>
-                  <p><strong>Promotion:</strong> {showDetails.promotion?.nom || "—"}</p>
-                  <p><strong>Filière:</strong> {showDetails.promotion?.filiereId ? filieres.find(f => f.id === showDetails.promotion?.filiereId)?.nom : "—"}</p>
-                  <p><strong>Créé le:</strong> {showDetails.createdAt ? new Date(showDetails.createdAt).toLocaleDateString() : "—"}</p>
-                  <p><strong>Mis à jour le:</strong> {showDetails.updatedAt ? new Date(showDetails.updatedAt).toLocaleDateString() : "—"}</p>
-                </div>
-
-                <div className="mt-4 text-right">
-                  <Button variant="outline" onClick={() => setShowDetails(null)}>Fermer</Button>
-                </div>
-              </div>
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-start pt-20 z-50">
+          <div className="bg-white rounded shadow-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Détails</h2>
+            <ul className="space-y-2">
+              <li><strong>Matricule:</strong> {showDetails.matricule}</li>
+              <li><strong>Nom:</strong> {showDetails.nom}</li>
+              <li><strong>Prénom:</strong> {showDetails.prenom}</li>
+              <li><strong>Sexe:</strong> {showDetails.sexe}</li>
+              <li><strong>Email:</strong> {showDetails.user?.email}</li>
+              <li><strong>Téléphone:</strong> {showDetails.user?.telephone}</li>
+              <li><strong>Date Naissance:</strong> {showDetails.dateNaissance ? new Date(showDetails.dateNaissance).toLocaleDateString() : "—"}</li>
+              <li><strong>Promotion:</strong> {showDetails.promotion?.nom}</li>
+              <li><strong>Grade:</strong> {showDetails.grade}</li>
+              <li><strong>État dossier:</strong> {showDetails.etatDossier}</li>
+            </ul>
+            <div className="flex justify-end mt-4">
+              <Button variant="outline" onClick={() => setShowDetails(null)}>Fermer</Button>
             </div>
           </div>
         </div>
       )}
-
     </div>
   );
-}
-
-/* Small helper used in pagination area */
-function searchableStudentsCount(search: string, students: Student[], filteredPromos: Promotion[]) {
-  if (!search) return students.length;
-  const s = students.filter((st) => {
-    const hay = [st.nom, st.prenom, st.matricule, st.user?.email, st.user?.telephone, st.promotion?.nom]
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(search.toLowerCase());
-  });
-  return s.length;
-}
-
-// computed totalPages used earlier
-function totalPagesFor(studentsLength: number, perPage: number) {
-  return Math.max(1, Math.ceil(studentsLength / perPage));
 }

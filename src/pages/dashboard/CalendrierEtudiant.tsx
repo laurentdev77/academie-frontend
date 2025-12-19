@@ -4,7 +4,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
-import axios from "axios";
+import api from "@/utils/axiosConfig";
 
 export default function CalendrierEtudiant() {
   const [events, setEvents] = useState<any[]>([]);
@@ -14,60 +14,45 @@ export default function CalendrierEtudiant() {
   // Charger les schedules de l'étudiant connecté
   // -------------------------------------------------
   const fetchStudentSchedules = async () => {
-    try {
-      const token = localStorage.getItem("token");
+  try {
+    const response = await api.get("/schedules/student/my");
 
-      if (!token) {
-        console.warn("Aucun token trouvé, l'étudiant n'est pas connecté");
-        setLoading(false);
-        return;
-      }
+    const schedules = Array.isArray(response.data) ? response.data : [];
 
-      const response = await axios.get(
-        "http://localhost:5000/api/schedules/student/my",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+    const mapped = schedules.map((s: any) => {
+      const moduleName = s.module?.title ?? "";
+      const teacherName = s.teacher
+        ? `${s.teacher.nom} ${s.teacher.prenom}`
+        : "";
+      const promotionName = s.promotion?.nom ?? "";
 
-      const schedules = Array.isArray(response.data) ? response.data : [];
+      const titleParts = [
+        s.title,
+        moduleName,
+        promotionName,
+        teacherName,
+      ].filter(Boolean);
 
-      const mapped = schedules.map((s: any) => {
-        const moduleName = s.module?.title ?? "";
-        const teacherName =
-          s.teacher ? `${s.teacher.nom} ${s.teacher.prenom}` : "";
-        const promotionName = s.promotion?.nom ?? "";
+      const color = s.color ?? "#0d6efd";
 
-        const titleParts = [
-          s.title,
-          moduleName,
-          promotionName,
-          teacherName,
-        ].filter(Boolean);
+      return {
+        id: s.id,
+        title: titleParts.join(" — "),
+        start: s.start,
+        end: s.end,
+        backgroundColor: color,
+        borderColor: color,
+        extendedProps: s,
+      };
+    });
 
-        const color = s.color ?? "#0d6efd";
-
-        return {
-          id: s.id,
-          title: titleParts.join(" — "),
-          start: s.start,
-          end: s.end,
-          backgroundColor: color,
-          borderColor: color,
-          extendedProps: s,
-        };
-      });
-
-      setEvents(mapped);
-    } catch (error) {
-      console.error("Erreur calendrier Académique :", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setEvents(mapped);
+  } catch (error) {
+    console.error("Erreur calendrier Académique :", error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchStudentSchedules();

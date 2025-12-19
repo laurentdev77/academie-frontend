@@ -1,7 +1,7 @@
 // src/layouts/DashboardLayout.tsx
 import React, { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import axios from "axios";
+import api from "@/utils/axiosConfig";
 import { Button } from "@/components/ui/button";
 import {
   LucideHome,
@@ -22,11 +22,7 @@ import {
  * - Lit le profil via /api/auth/profile (token)
  * - Gère l'affichage des liens selon rôle
  * - Responsive: sidebar collapsible + mobile drawer
- *
- * NOTE: adapte API_BASE si nécessaire.
  */
-
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 interface User {
   id?: string;
@@ -78,7 +74,6 @@ const DashboardLayout: React.FC = () => {
 
   // Helper: token header
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   // Fetch profile from backend (if token present)
   useEffect(() => {
@@ -87,14 +82,14 @@ const DashboardLayout: React.FC = () => {
       setLoadingProfile(true);
       setAuthError(null);
       try {
-        const res = await axios.get(`${API_BASE}/auth/profile`, { headers });
-        const u = res.data?.user ?? res.data?.user ?? null;
+        const res = await api.get("/auth/profile");
+        const u = res.data?.user ?? null;
         // normalize
         const normalized: User | null = u
           ? {
               id: u.id,
               username: u.username ?? u.name ?? "Utilisateur",
-              role: u.role ?? (u.roleId ? { name: u.roleId } : undefined),
+              role: u.role && typeof u.role === "object"? { name: u.role.name }: undefined,
               avatarUrl: u.photoUrl ?? u.avatarUrl ?? null,
               email: u.email ?? null,
             }

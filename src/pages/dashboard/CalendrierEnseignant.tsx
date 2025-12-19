@@ -6,7 +6,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
-import axios from "axios";
+import api from "@/utils/axiosConfig";
 
 export default function CalendrierEnseignant() {
   const [events, setEvents] = useState<any[]>([]);
@@ -16,57 +16,41 @@ export default function CalendrierEnseignant() {
   // Charger les schedules du professeur connecté
   // -------------------------------------------------
   const fetchMySchedules = async () => {
-    try {
-      const token = localStorage.getItem("token");
+  try {
+    const response = await api.get("/schedules/my");
 
-      if (!token) {
-        console.warn("Aucun token trouvé : enseignant non connecté.");
-        setLoading(false);
-        return;
-      }
+    const schedules = Array.isArray(response.data) ? response.data : [];
 
-      const response = await axios.get(
-        "http://localhost:5000/api/schedules/my",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+    const mapped = schedules.map((s: any) => {
+      const moduleName = s.module?.title ?? "";
+      const promotionName = s.promotion?.nom ?? "";
+      const teacherFullName = s.teacher
+        ? `${s.teacher.nom} ${s.teacher.prenom}`
+        : "";
 
-      const schedules = Array.isArray(response.data) ? response.data : [];
+      const titleParts = [s.title, moduleName, promotionName, teacherFullName]
+        .filter((x) => x && x.trim() !== "");
 
-      // Transformer les schedules en events compatibles FullCalendar
-      const mapped = schedules.map((s: any) => {
-        const moduleName = s.module?.title ?? "";
-        const promotionName = s.promotion?.nom ?? "";
-        const teacherFullName = s.teacher
-          ? `${s.teacher.nom} ${s.teacher.prenom}`
-          : "";
+      const color = s.color ?? "#0066ff";
 
-        const titleParts = [s.title, moduleName, promotionName, teacherFullName]
-          .filter((x) => x && x.trim() !== "");
+      return {
+        id: s.id,
+        title: titleParts.join(" — "),
+        start: s.start,
+        end: s.end,
+        backgroundColor: color,
+        borderColor: color,
+        extendedProps: s,
+      };
+    });
 
-        const color = s.color ?? "#0066ff";
-
-        return {
-          id: s.id,
-          title: titleParts.join(" — "),
-          start: s.start,
-          end: s.end,
-          backgroundColor: color,
-          borderColor: color,
-          extendedProps: s,
-        };
-      });
-
-      setEvents(mapped);
-    } catch (error) {
-      console.error("Erreur calendrier enseignant :", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setEvents(mapped);
+  } catch (error) {
+    console.error("Erreur calendrier enseignant :", error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchMySchedules();

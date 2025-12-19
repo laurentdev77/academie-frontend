@@ -1,6 +1,6 @@
 // src/pages/dashboard/Bulletins.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import api from "@/utils/axiosConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -113,7 +113,6 @@ function decisionFromAverage(avg: number): string {
    Composant principal
    ------------------------- */
 const BulletinsPage: React.FC = () => {
-  const token = localStorage.getItem("token");
 
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -148,15 +147,14 @@ const BulletinsPage: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
+      
       // NOTE: on utilise uniquement /api/notes (backend renvoie { message, data })
       const [promRes, studRes, modRes, noteRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/promotions", { headers }),
-        axios.get("http://localhost:5000/api/students", { headers }),
-        axios.get("http://localhost:5000/api/modules", { headers }),
-        axios.get("http://localhost:5000/api/notes", { headers }),
-      ]);
+  api.get("/promotions"),
+  api.get("/students"),
+  api.get("/modules"),
+  api.get("/notes"),
+]);
 
       // robust extraction (supporte plusieurs formats: {data: [...]}, [...], {notes: [...]})
       const promData: Promotion[] =
