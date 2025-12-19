@@ -1,4 +1,4 @@
-import api from "./axios";
+import api from "./api";
 
 export interface LoginData {
   usernameOrEmail: string;
@@ -13,14 +13,14 @@ export interface RegisterData {
 
 // 🔐 Login
 export const login = async (data: LoginData) => {
-  const response = await api.post("/auth/login", data);
-  return response.data;
+  const res = await api.post("/auth/login", data);
+  return res.data;
 };
 
 // 📝 Register
 export const register = async (data: RegisterData) => {
-  const response = await api.post("/auth/register", data);
-  return response.data;
+  const res = await api.post("/auth/register", data);
+  return res.data;
 };
 
 // 🚪 Logout

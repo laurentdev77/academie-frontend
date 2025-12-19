@@ -1,38 +1,31 @@
 // src/utils/axiosConfig.ts
-
 import axios from "axios";
 
+// ✅ Utiliser la variable d'environnement VITE_API_URL
 const instance = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: import.meta.env.VITE_API_URL, // Render ou local
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// =============================================
-// 🔐 Injection correcte du token (Authorization: Bearer token)
-// =============================================
+// 🔐 Injection du token Authorization: Bearer token
 instance.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
-
     if (token && config.headers) {
-      config.headers["authorization"] = `Bearer ${token}`;
+      config.headers.Authorization = `Bearer ${token}`;
     }
-
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// =============================================
-// Gestion des erreurs globale
-// =============================================
+// ⚠️ Gestion des erreurs globale
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
     console.error("Erreur Axios:", error);
-
     if (
       error.response &&
       (error.response.status === 401 || error.response.status === 403)
@@ -40,7 +33,6 @@ instance.interceptors.response.use(
       localStorage.removeItem("token");
       window.location.href = "/login";
     }
-
     return Promise.reject(error);
   }
 );

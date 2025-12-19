@@ -13,32 +13,30 @@ const Login: React.FC = () => {
   const [isPending, setIsPending] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsPending(true);
+  e.preventDefault();
+  setError("");
+  setIsPending(true);
 
-    try {
-      const data: LoginData = {
-        usernameOrEmail: username,  // ✔️ important
-        password,
-      };
+  try {
+    const response = await login({
+      usernameOrEmail: username,
+      password,
+    });
 
-      const response = await login(data);
+    localStorage.setItem("token", response.token);
+    localStorage.setItem("user", JSON.stringify(response.user));
 
-      localStorage.setItem("token", response.token);
-      localStorage.setItem("user", JSON.stringify(response.user));
-
-      if (response.user?.role?.name) {
-        localStorage.setItem("role", response.user.role.name.toLowerCase());
-      }
-
-      navigate("/dashboard");
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Erreur de connexion");
-    } finally {
-      setIsPending(false);
+    if (response.user?.role?.name) {
+      localStorage.setItem("role", response.user.role.name.toLowerCase());
     }
-  };
+
+    navigate("/dashboard");
+  } catch (err: any) {
+    setError(err.response?.data?.message || "Erreur de connexion");
+  } finally {
+    setIsPending(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-gray-100 to-gray-200 p-6">

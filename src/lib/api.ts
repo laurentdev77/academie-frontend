@@ -1,17 +1,11 @@
-// src/lib/api.ts
 import axios from "axios";
 
-const API_URL = "http://localhost:5000/api";
-
-// 🔥 Instance Axios centralisée
-export const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL, // Render ou local
+  withCredentials: true, // IMPORTANT pour cookies / CORS
 });
 
-// 🔹 Ajouter automatiquement le JWT
+// Ajouter automatiquement le token si présent
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
@@ -20,21 +14,4 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 🔹 Gestion d’erreurs globales
-api.interceptors.response.use(
-  (response) => response,
-
-  (error) => {
-    console.error("Erreur API:", error?.response?.data || error.message);
-
-    // 🔥 Cas très fréquent : token expiré → 401
-    if (error.response?.status === 401) {
-      console.warn("401 Unauthorized → redirection vers /login");
-
-      localStorage.removeItem("token"); // Important : on nettoie
-      window.location.href = "/login";
-    }
-
-    return Promise.reject(error);
-  }
-);
+export default api;
