@@ -298,40 +298,49 @@ export default function Etudiants() {
   }
 
   async function submitForm() {
-    setErrorMsg(null);
-    if (!form.matricule || !form.nom || !form.promotionId) {
-      setErrorMsg("Matricule, Nom et Promotion sont obligatoires.");
-      return;
-    }
+  setErrorMsg(null);
 
-    const payload = {
-      matricule: form.matricule,
-      nom: form.nom,
-      prenom: form.prenom || null,
-      sexe: form.sexe || null,
-      dateNaissance: form.dateNaissance || null,
-      lieuNaissance: form.lieuNaissance || null,
-      photoUrl: form.photoUrl || null,
-      grade: form.grade || null,
-      etatDossier: form.etatDossier || "en_cours",
-      promotionId: Number(form.promotionId),
-    };
-
-    try {
-      if (editing) {
-        await axios.put(`${API_BASE}/students/${editing.id}`, payload, { headers });
-        setSuccessMsg("Elève Officier mis à jour");
-      } else {
-        await axios.post(`${API_BASE}/students`, payload, { headers });
-        setSuccessMsg("Elève Officier créé");
-      }
-      setShowForm(false);
-      fetchAllStudents();
-    } catch (err: any) {
-      console.error("submitForm error:", err);
-      setErrorMsg(err?.response?.data?.message ?? "Erreur lors de l'enregistrement");
-    }
+  // Validation côté frontend
+  if (!form.matricule || !form.nom || !form.promotionId) {
+    setErrorMsg("Matricule, Nom et Promotion sont obligatoires.");
+    return;
   }
+
+  // Préparer le payload compatible avec le backend
+  const payload = {
+    matricule: form.matricule,
+    nom: form.nom,
+    prenom: form.prenom || null,
+    sexe: form.sexe || null, // doit être "M", "F" ou "Autre"
+    dateNaissance: form.dateNaissance || null,
+    lieuNaissance: form.lieuNaissance || null,
+    photoUrl: form.photoUrl || null,
+    grade: form.grade || null,
+    etatDossier: form.etatDossier || "en_cours",
+    promotionId: Number(form.promotionId),
+    userId: form.userId ? form.userId : null, // jamais envoyer "" au backend
+  };
+
+  try {
+    if (editing) {
+      // Mise à jour
+      await axios.put(`${API_BASE}/students/${editing.id}`, payload, { headers });
+      setSuccessMsg("Elève Officier mis à jour");
+    } else {
+      // Création
+      await axios.post(`${API_BASE}/students`, payload, { headers });
+      setSuccessMsg("Elève Officier créé");
+    }
+
+    setShowForm(false);
+    fetchAllStudents(); // rafraîchir la liste
+  } catch (err: any) {
+    console.error("submitForm error:", err);
+
+    // Message d'erreur plus précis si backend le fournit
+    setErrorMsg(err?.response?.data?.message || "Erreur lors de l'enregistrement");
+  }
+}
 
   async function deleteStudent(id: string) {
     if (!confirm("Supprimer cet Elève Officier ?")) return;
