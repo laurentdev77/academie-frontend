@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import axios from "axios";
+import api from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useReactToPrint } from "react-to-print";
@@ -42,8 +42,6 @@ interface Note {
 /* ============================================================
    🔹 Constantes
    ============================================================ */
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
 const NotesEnseignant: React.FC = () => {
   const [modules, setModules] = useState<Module[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -64,9 +62,6 @@ const NotesEnseignant: React.FC = () => {
   });
 
   const printRef = useRef<HTMLDivElement | null>(null);
-  const token = localStorage.getItem("token");
-  const headers = { Authorization: `Bearer ${token}` };
-
   /* ============================================================
      🧾 Impression PDF
      ============================================================ */
@@ -80,8 +75,8 @@ const NotesEnseignant: React.FC = () => {
      ============================================================ */
   const fetchModules = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/Modules/my`, { headers });
-      setModules(res.data.data || []);
+      const res = await api.get("/modules/my");
+setModules(res.data.data || []);
     } catch {
       toast.error("Erreur lors du chargement des modules.");
     }
@@ -92,8 +87,9 @@ const NotesEnseignant: React.FC = () => {
      ============================================================ */
   const fetchStudents = async (moduleId: string) => {
     try {
-      const res = await axios.get(`${API_BASE}/students/by-module/${moduleId}`, { headers });
-      setStudents(res.data || []);
+      const res = await api.get(`/students/by-module/${moduleId}`);
+setStudents(res.data || []);
+
     } catch {
       setStudents([]);
     }
@@ -105,8 +101,8 @@ const NotesEnseignant: React.FC = () => {
   const fetchNotes = async (moduleId: string) => {
     try {
       setLoading(true);
-      const res = await axios.get(`${API_BASE}/Notes/module/${moduleId}`, { headers });
-      setNotes(res.data.data || []);
+      const res = await api.get(`/notes/module/${moduleId}`);
+setNotes(res.data.data || []);
     } catch {
       toast.error("Erreur lors du chargement des notes.");
     } finally {
@@ -123,10 +119,11 @@ const NotesEnseignant: React.FC = () => {
 
     try {
       const endpoint = isEditing
-        ? `${API_BASE}/Notes/module/${selectedModule}/${currentNoteId}`
-        : `${API_BASE}/Notes/module/${selectedModule}/add`;
-      const method = isEditing ? "put" : "post";
-      await axios[method](endpoint, noteForm, { headers });
+       if (isEditing) {
+  await api.put(`/notes/module/${selectedModule}/${currentNoteId}`, noteForm);
+} else {
+  await api.post(`/notes/module/${selectedModule}/add`, noteForm);
+}
       toast.success(isEditing ? "Note modifiée avec succès." : "Note ajoutée avec succès !");
       setShowModal(false);
       fetchNotes(selectedModule);
@@ -141,7 +138,7 @@ const NotesEnseignant: React.FC = () => {
   const handleDelete = async (noteId?: string) => {
     if (!noteId || !confirm("Confirmer la suppression ?")) return;
     try {
-      await axios.delete(`${API_BASE}/Notes/${noteId}`, { headers });
+      await api.delete(`/notes/${noteId}`);
       toast.success("Note supprimée !");
       fetchNotes(selectedModule);
     } catch {

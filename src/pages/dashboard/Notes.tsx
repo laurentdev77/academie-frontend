@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "@/services/api";
 import * as XLSX from "xlsx";
 // @ts-ignore
 import { saveAs } from "file-saver";
@@ -33,9 +33,6 @@ const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) 
 );
 
 const Notes: React.FC = () => {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [modules, setModules] = useState<ModuleType[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -86,11 +83,11 @@ const Notes: React.FC = () => {
   const fetchAllStatic = async () => {
     try {
       const [mRes, sRes, pRes, fRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/modules", { headers }),
-        axios.get("http://localhost:5000/api/students", { headers }),
-        axios.get("http://localhost:5000/api/promotions", { headers }),
-        axios.get("http://localhost:5000/api/filieres", { headers }),
-      ]);
+  api.get("/modules"),
+  api.get("/students"),
+  api.get("/promotions"),
+  api.get("/filieres"),
+]);
 
       setModules(Array.isArray(mRes.data?.data) ? mRes.data.data : Array.isArray(mRes.data) ? mRes.data : []);
       setStudents(Array.isArray(sRes.data?.data) ? sRes.data.data : Array.isArray(sRes.data) ? sRes.data : []);
@@ -113,7 +110,7 @@ const Notes: React.FC = () => {
       if (session !== "all") params.session = session;
       if (semester) params.semester = semester;
 
-      const res = await axios.get("http://localhost:5000/api/notes", { headers, params });
+     const res = await api.get("/notes", { params });
       const data = Array.isArray(res.data?.data)
         ? res.data.data
         : Array.isArray(res.data)
@@ -175,12 +172,10 @@ const Notes: React.FC = () => {
 
     try {
       if (editingNote) {
-        await axios.put(`http://localhost:5000/api/notes/${editingNote.id}`, payload, { headers });
-        setSuccessMsg("Note mise à jour avec succès");
-      } else {
-        await axios.post("http://localhost:5000/api/notes", payload, { headers });
-        setSuccessMsg("Note ajoutée avec succès");
-      }
+  await api.put(`/notes/${editingNote.id}`, payload);
+} else {
+  await api.post("/notes", payload);
+}
       setShowForm(false);
       fetchNotes();
     } catch (err: any) {
@@ -192,7 +187,7 @@ const Notes: React.FC = () => {
   const deleteNote = async (id: string) => {
     if (!window.confirm("Supprimer cette note ?")) return;
     try {
-      await axios.delete(`http://localhost:5000/api/notes/${id}`, { headers });
+     await api.delete(`/notes/${id}`);
       setSuccessMsg("Note supprimée");
       fetchNotes();
     } catch (err) {

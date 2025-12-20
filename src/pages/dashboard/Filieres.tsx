@@ -1,3 +1,4 @@
+// frontend/src/pages/dashboard/FilieresPage.tsx
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LucidePlus, LucideEdit, LucideTrash2, LucideRefreshCw } from "lucide-react";
+import { Plus, Edit, Trash2, RefreshCcw } from "lucide-react"; // ✅ version correcte
 
 interface Filiere {
   id: number;
@@ -19,6 +20,8 @@ interface Filiere {
   createdAt?: string;
   updatedAt?: string;
 }
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const FilieresPage: React.FC = () => {
   const token = localStorage.getItem("token");
@@ -42,7 +45,7 @@ const FilieresPage: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await axios.get("http://localhost:5000/api/filieres", { headers });
+      const res = await axios.get(`${API_BASE}/filieres`, { headers });
       const data =
         Array.isArray(res.data)
           ? res.data
@@ -72,62 +75,53 @@ const FilieresPage: React.FC = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setErrorMsg(null);
-  setSuccessMsg(null);
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
 
-  if (!form.nom || form.nom.trim().length < 2) {
-    setErrorMsg("Le nom de la filière est requis (≥2 caractères).");
-    return;
-  }
-
-  // ✅ Nettoyage avant envoi
-  const payload = {
-    nom: form.nom.trim(),
-    description: form.description?.trim() || "", // toujours une chaîne, jamais null
-  };
-
-  try {
-    if (editing) {
-      await axios.put(`http://localhost:5000/api/filieres/${editing.id}`, payload, { headers });
-      setSuccessMsg("Filière mise à jour.");
-    } else {
-      await axios.post("http://localhost:5000/api/filieres", payload, { headers });
-      setSuccessMsg("Filière ajoutée.");
+    if (!form.nom || form.nom.trim().length < 2) {
+      setErrorMsg("Le nom de la filière est requis (≥2 caractères).");
+      return;
     }
 
-    // ✅ Recharger la liste après sauvegarde
-    await fetchFilieres();
+    const payload = {
+      nom: form.nom.trim(),
+      description: form.description?.trim() || "",
+    };
 
-    // ✅ Réinitialiser le formulaire
-    setForm({ nom: "", description: "" });
-    setEditing(null);
+    try {
+      if (editing) {
+        await axios.put(`${API_BASE}/filieres/${editing.id}`, payload, { headers });
+        setSuccessMsg("Filière mise à jour.");
+      } else {
+        await axios.post(`${API_BASE}/filieres`, payload, { headers });
+        setSuccessMsg("Filière ajoutée.");
+      }
 
-    // ✅ Laisse React finir le cycle de rendu avant de fermer le Dialog
-    requestAnimationFrame(() => {
-      setTimeout(() => setOpenForm(false), 100);
-    });
-  } catch (err: any) {
-    console.error("save filiere error:", err);
-    setErrorMsg(err.response?.data?.message || "Erreur lors de l'enregistrement");
-  }
-};
+      await fetchFilieres();
+      setForm({ nom: "", description: "" });
+      setEditing(null);
+      requestAnimationFrame(() => setTimeout(() => setOpenForm(false), 100));
+    } catch (err: any) {
+      console.error("save filiere error:", err);
+      setErrorMsg(err.response?.data?.message || "Erreur lors de l'enregistrement");
+    }
+  };
 
-// 🔄 Efface automatiquement les messages après 3 secondes
-useEffect(() => {
-  if (successMsg || errorMsg) {
-    const timer = setTimeout(() => {
-      setSuccessMsg(null);
-      setErrorMsg(null);
-    }, 3000);
-    return () => clearTimeout(timer);
-  }
-}, [successMsg, errorMsg]);
+  useEffect(() => {
+    if (successMsg || errorMsg) {
+      const timer = setTimeout(() => {
+        setSuccessMsg(null);
+        setErrorMsg(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg, errorMsg]);
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Supprimer cette filière ?")) return;
     try {
-      await axios.delete(`http://localhost:5000/api/filieres/${id}`, { headers });
+      await axios.delete(`${API_BASE}/filieres/${id}`, { headers });
       setSuccessMsg("Filière supprimée.");
       fetchFilieres();
     } catch (err: any) {
@@ -153,10 +147,10 @@ useEffect(() => {
               className="w-64"
             />
             <Button onClick={fetchFilieres} variant="outline">
-              <LucideRefreshCw className="w-4 h-4 mr-1" /> Actualiser
+              <RefreshCcw className="w-4 h-4 mr-1" /> Actualiser
             </Button>
             <Button onClick={openCreate} className="bg-blue-600 text-white">
-              <LucidePlus className="w-4 h-4 mr-1" /> Ajouter
+              <Plus className="w-4 h-4 mr-1" /> Ajouter
             </Button>
           </div>
         </CardHeader>
@@ -190,10 +184,10 @@ useEffect(() => {
                       </td>
                       <td className="px-3 py-2 text-center flex justify-center gap-2">
                         <Button size="sm" variant="outline" onClick={() => openEdit(f)}>
-                          <LucideEdit className="w-4 h-4" />
+                          <Edit className="w-4 h-4" />
                         </Button>
                         <Button size="sm" variant="destructive" onClick={() => handleDelete(f.id)}>
-                          <LucideTrash2 className="w-4 h-4" />
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>
                     </tr>
@@ -205,7 +199,6 @@ useEffect(() => {
         </CardContent>
       </Card>
 
-      {/* ✅ Clé stable pour éviter les erreurs DOM */}
       <Dialog
         key={editing ? `edit-${editing.id}` : "new"}
         open={openForm}

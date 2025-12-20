@@ -1,12 +1,11 @@
 // src/pages/dashboard/ModulesEtudiant.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+import api from "@/services/api"; // ✅ IMPORTANT
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
-  LucideFolder,
   LucideFileText,
   LucideVideo,
   LucideDownload,
@@ -97,28 +96,31 @@ export default function ModulesEtudiant() {
 
   /* ------------------------- Fetch modules ------------------------- */
   const fetchModules = async () => {
-    setLoading(true);
-    setError(null);
+  setLoading(true);
+  setError(null);
 
-    try {
-      const res = await axios.get("http://localhost:5000/api/students/mes-modules", { headers });
-      const data = res.data ?? res;
+  try {
+    const res = await api.get("/students/mes-modules"); // ✅ Render OK
+    const data = res.data;
 
-      // backend returns { promotion, modules }
-      setPromotion(data.promotion ?? null);
-      setModules(Array.isArray(data.modules) ? data.modules : []);
-      if (Array.isArray(data.modules) && data.modules.length > 0) {
-        setSelectedModule(data.modules[0]);
-      } else {
-        setSelectedModule(null);
-      }
-    } catch (err: any) {
-      console.error("fetchModules error:", err);
-      setError(err.response?.data?.message ?? "Erreur lors du chargement des modules.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    setPromotion(data.promotion ?? null);
+    setModules(Array.isArray(data.modules) ? data.modules : []);
+
+    setSelectedModule(
+      Array.isArray(data.modules) && data.modules.length > 0
+        ? data.modules[0]
+        : null
+    );
+  } catch (err: any) {
+    console.error("fetchModules error:", err);
+    setError(
+      err.response?.data?.message ??
+        "Erreur lors du chargement des modules."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchModules();

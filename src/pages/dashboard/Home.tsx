@@ -1,6 +1,5 @@
-// src/pages/dashboard/Home.tsx
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,12 +13,12 @@ import {
 } from "recharts";
 import { Progress } from "@/components/ui/progress";
 import {
-  LucideUser,
-  LucideBookOpen,
-  LucideFileText,
-  LucideAward,
-  LucideRefreshCw,
-  LucideGraduationCap,
+  User,
+  BookOpen,
+  FileText,
+  Award,
+  RefreshCcw,
+  GraduationCap,
 } from "lucide-react";
 
 interface StatsData {
@@ -33,9 +32,7 @@ interface StatsData {
 }
 
 const DashboardHome: React.FC = () => {
-  const token = localStorage.getItem("token");
   const role = localStorage.getItem("role") || "admin";
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const [stats, setStats] = useState<StatsData>({});
   const [loading, setLoading] = useState(false);
@@ -49,7 +46,7 @@ const DashboardHome: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get("http://localhost:5000/api/dashboard/stats", { headers });
+      const res = await api.get("/dashboard/stats");
       setStats(res.data);
     } catch (err: any) {
       console.error("Erreur fetchStats:", err);
@@ -59,7 +56,7 @@ const DashboardHome: React.FC = () => {
     }
   };
 
-  // Construire les données pour le graphique
+  // Données du graphique
   const chartData =
     role === "student"
       ? [
@@ -73,7 +70,6 @@ const DashboardHome: React.FC = () => {
           { name: "Notes", value: stats.notes || 0 },
         ];
 
-  // Pourcentages pour progress bars
   const total =
     role === "student"
       ? (stats.notesForStudent || 0) + (stats.bulletinsForStudent || 0)
@@ -89,7 +85,7 @@ const DashboardHome: React.FC = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Tableau de bord</h1>
         <Button onClick={fetchStats} variant="outline">
-          <LucideRefreshCw className="w-4 h-4 mr-1" /> Actualiser
+          <RefreshCcw className="w-4 h-4 mr-1" /> Actualiser
         </Button>
       </div>
 
@@ -99,14 +95,14 @@ const DashboardHome: React.FC = () => {
         <p>Chargement...</p>
       ) : (
         <>
-          {/* ======== Cartes statistiques ======== */}
+          {/* Cartes statistiques */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {role !== "student" ? (
               <>
                 <Card>
                   <CardHeader className="flex justify-between items-center">
                     <CardTitle>Elèves Officiers</CardTitle>
-                    <LucideUser className="text-blue-500" />
+                    <User className="text-blue-500" />
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-bold">{stats.students || 0}</p>
@@ -117,7 +113,7 @@ const DashboardHome: React.FC = () => {
                 <Card>
                   <CardHeader className="flex justify-between items-center">
                     <CardTitle>Enseignants</CardTitle>
-                    <LucideGraduationCap className="text-indigo-500" />
+                    <GraduationCap className="text-indigo-500" />
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-bold">{stats.teachers || 0}</p>
@@ -128,7 +124,7 @@ const DashboardHome: React.FC = () => {
                 <Card>
                   <CardHeader className="flex justify-between items-center">
                     <CardTitle>Modules</CardTitle>
-                    <LucideBookOpen className="text-purple-500" />
+                    <BookOpen className="text-purple-500" />
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-bold">{stats.modules || 0}</p>
@@ -139,7 +135,7 @@ const DashboardHome: React.FC = () => {
                 <Card>
                   <CardHeader className="flex justify-between items-center">
                     <CardTitle>Notes</CardTitle>
-                    <LucideFileText className="text-green-500" />
+                    <FileText className="text-green-500" />
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-bold">{stats.notes || 0}</p>
@@ -152,7 +148,7 @@ const DashboardHome: React.FC = () => {
                 <Card>
                   <CardHeader className="flex justify-between items-center">
                     <CardTitle>Mes Notes</CardTitle>
-                    <LucideFileText className="text-green-500" />
+                    <FileText className="text-green-500" />
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-bold">{stats.notesForStudent || 0}</p>
@@ -163,7 +159,7 @@ const DashboardHome: React.FC = () => {
                 <Card>
                   <CardHeader className="flex justify-between items-center">
                     <CardTitle>Mes Bulletins</CardTitle>
-                    <LucideAward className="text-yellow-500" />
+                    <Award className="text-yellow-500" />
                   </CardHeader>
                   <CardContent>
                     <p className="text-3xl font-bold">{stats.bulletinsForStudent || 0}</p>
@@ -174,14 +170,14 @@ const DashboardHome: React.FC = () => {
             )}
           </div>
 
-          {/* ======== Graphique ======== */}
+          {/* Graphique */}
           <Card className="mt-6">
             <CardHeader>
               <CardTitle>Vue d’ensemble</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
                   <YAxis />

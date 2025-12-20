@@ -1,13 +1,5 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
-
-const API = import.meta.env.VITE_API_URL || "";
-
-// Auth header
-const getAuthHeader = () => {
-  const token = localStorage.getItem("token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+import api from "@/services/api"; // ✅ service central pour axios
 
 // Types
 interface Module {
@@ -67,9 +59,7 @@ export default function PresenceAdmin() {
   // Load modules
   const loadModules = async () => {
     try {
-      const res = await axios.get(`${API}/modules`, {
-        headers: getAuthHeader(),
-      });
+      const res = await api.get("/modules");
       setModules(pick(res.data, ["modules", "data"]));
     } catch (e) {
       console.error("Erreur loadModules", e);
@@ -79,10 +69,7 @@ export default function PresenceAdmin() {
   // Load seances
   const loadSeances = async (moduleId: string) => {
     try {
-      const res = await axios.get(
-        `${API}/presence/seances/by-module/${moduleId}`,
-        { headers: getAuthHeader() }
-      );
+      const res = await api.get(`/presence/seances/by-module/${moduleId}`);
       setSeances(pick(res.data, ["seances", "data"]));
     } catch (e) {
       console.error("Erreur loadSeances", e);
@@ -93,10 +80,7 @@ export default function PresenceAdmin() {
   const loadStudents = async (promotionId?: string | number | null) => {
     if (!promotionId) return;
     try {
-      const res = await axios.get(
-        `${API}/students/by-promotion/${promotionId}`,
-        { headers: getAuthHeader() }
-      );
+      const res = await api.get(`/students/by-promotion/${promotionId}`);
       setStudents(pick(res.data, ["students", "data"]));
     } catch (e) {
       console.error("Erreur loadStudents", e);
@@ -106,18 +90,12 @@ export default function PresenceAdmin() {
   // Load presences
   const loadPresences = async (seanceId: string) => {
     try {
-      const res = await axios.get(
-        `${API}/presence/by-seance/${seanceId}`,
-        { headers: getAuthHeader() }
-      );
-
+      const res = await api.get(`/presence/by-seance/${seanceId}`);
       const list: Presence[] = pick(res.data, ["presences"]);
       const map: Record<string, { statut: string; motif: string }> = {};
-
       list.forEach((p) => {
         map[p.studentId] = { statut: p.statut, motif: p.motif ?? "" };
       });
-
       setPresences(map);
     } catch (e) {
       console.error("Erreur loadPresences", e);
@@ -127,18 +105,12 @@ export default function PresenceAdmin() {
   // Create seance
   const createSeance = async () => {
     if (!selectedModule) return alert("Choisir un module.");
-
     try {
-      const res = await axios.post(
-        `${API}/presence/seance`,
-        {
-          moduleId: selectedModule.id,
-          titre: "Nouvelle séance",
-          date: new Date().toISOString().slice(0, 10),
-        },
-        { headers: getAuthHeader() }
-      );
-
+      const res = await api.post("/presence/seance", {
+        moduleId: selectedModule.id,
+        titre: "Nouvelle séance",
+        date: new Date().toISOString().slice(0, 10),
+      });
       const seance = res.data?.seance ?? res.data;
       setSeances((p) => [...p, seance]);
       setSelectedSeance(seance);
@@ -149,16 +121,11 @@ export default function PresenceAdmin() {
     }
   };
 
-  // Update seance (Admin modification)
+  // Update seance
   const updateSeanceInfo = async () => {
     if (!selectedSeance) return;
-
     try {
-      await axios.put(
-        `${API}/presence/seance/${selectedSeance.id}`,
-        selectedSeance,
-        { headers: getAuthHeader() }
-      );
+      await api.put(`/presence/seance/${selectedSeance.id}`, selectedSeance);
       alert("Séance mise à jour");
       loadSeances(selectedSeance.moduleId);
     } catch (e) {
@@ -170,12 +137,8 @@ export default function PresenceAdmin() {
   const deleteSeance = async () => {
     if (!selectedSeance) return;
     if (!confirm("Supprimer définitivement cette séance ?")) return;
-
     try {
-      await axios.delete(`${API}/presence/seance/${selectedSeance.id}`, {
-        headers: getAuthHeader(),
-      });
-
+      await api.delete(`/presence/seance/${selectedSeance.id}`);
       alert("Séance supprimée.");
       setSelectedSeance(null);
       setPresences({});
@@ -188,24 +151,16 @@ export default function PresenceAdmin() {
   // Save all presences
   const saveAllPresences = async () => {
     if (!selectedSeance) return;
-
     try {
-      const headers = getAuthHeader();
-
       const promises = Object.entries(presences).map(
         ([studentId, p]) =>
-          axios.post(
-            `${API}/presence`,
-            {
-              studentId,
-              seanceId: selectedSeance.id,
-              statut: p.statut,
-              motif: p.motif,
-            },
-            { headers }
-          )
+          api.post("/presence", {
+            studentId,
+            seanceId: selectedSeance.id,
+            statut: p.statut,
+            motif: p.motif,
+          })
       );
-
       await Promise.all(promises);
       alert("Présences enregistrées !");
     } catch (e) {
@@ -311,10 +266,7 @@ export default function PresenceAdmin() {
               className="border p-2"
               value={selectedSeance.heureDebut ?? ""}
               onChange={(e) =>
-                setSelectedSeance({
-                  ...selectedSeance,
-                  heureDebut: e.target.value,
-                })
+                setSelectedSeance({ ...selectedSeance, heureDebut: e.target.value })
               }
             />
             <input
@@ -322,10 +274,7 @@ export default function PresenceAdmin() {
               className="border p-2"
               value={selectedSeance.heureFin ?? ""}
               onChange={(e) =>
-                setSelectedSeance({
-                  ...selectedSeance,
-                  heureFin: e.target.value,
-                })
+                setSelectedSeance({ ...selectedSeance, heureFin: e.target.value })
               }
             />
           </div>
@@ -364,7 +313,6 @@ export default function PresenceAdmin() {
             <tbody>
               {students.map((s) => {
                 const p = presences[s.id] ?? { statut: "", motif: "" };
-
                 return (
                   <tr key={s.id}>
                     <td className="p-2 border">{s.matricule}</td>

@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
 import { jsPDF } from "jspdf";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { useReactToPrint } from "react-to-print";
 import { Button } from "@/components/ui/button";
+import api from "@/services/api"; // ✅ utilisation du service central
 
 /* -------------------------
    Types
@@ -87,17 +87,11 @@ const NotesEtudiant: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("Token manquant — reconnectez-vous.");
-
-      const res = await axios.get("http://localhost:5000/api/Notes/student/my", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get("/notes/student/my"); // ✅ utilisation du service API
 
       const raw = Array.isArray(res.data.data) ? res.data.data : res.data || [];
 
       const normalized = raw.map((n: any) => {
-        // 👇 Normalisation fiable du semestre
         const sem =
           n.semester && Number(n.semester) > 0
             ? Number(n.semester)
@@ -119,7 +113,7 @@ const NotesEtudiant: React.FC = () => {
                 title: n.module.title,
                 code: n.module.code,
                 credits: n.module.credits,
-                semester: sem, // ✅ cohérence locale
+                semester: sem,
               }
             : undefined,
           student: n.student,

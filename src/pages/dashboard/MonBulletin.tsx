@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import axios from "axios";
+import api from "@/services/api";
 import { jsPDF } from "jspdf";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
@@ -85,8 +85,6 @@ const decisionLMD = (annual: number, sem1: number, sem2: number) => {
 /* ------------------------- Component ------------------------- */
 const MonBulletin: React.FC = () => {
   const printRef = useRef<HTMLDivElement | null>(null);
-  const token = localStorage.getItem("token");
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   const [notes, setNotes] = useState<NoteShape[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -105,52 +103,56 @@ const MonBulletin: React.FC = () => {
 
   /* ---- Fetch notes ---- */
   useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get("http://localhost:5000/api/Notes/student/my", { headers });
-        const raw = res.data?.data || [];
+  (async () => {
+    try {
+      setLoading(true);
 
-        const normalized = raw.map((n: any): NoteShape => ({
-          id: n.id,
-          studentId: n.studentId,
-          moduleId: n.moduleId,
-          session: n.session ?? "Normale",
-          ce: toNumberSafe(n.ce),
-          fe: toNumberSafe(n.fe),
-          score: Number(n.score ?? 0),
-          appreciation: n.appreciation ?? "",
-          semester: n.semester ?? n.module?.semester ?? 1,
-          module: n.module
-            ? {
-                id: n.module.id,
-                title: n.module.title,
-                code: n.module.code,
-                credits: n.module.credits ?? 0,
-                semester: n.module.semester ?? 1,
-              }
-            : null,
-          student: n.student
-            ? {
-                id: n.student.id,
-                nom: n.student.nom ?? "",
-                prenom: n.student.prenom ?? "",
-                matricule: n.student.matricule ?? "",
-                promotionId: n.student.promotionId ?? null,
-                promotion: n.student.promotion ?? null,
-              }
-            : null,
-        }));
+      const res = await api.get("/Notes/student/my"); // ✅ Render OK
+      const raw = res.data?.data || [];
 
-        setNotes(normalized);
-      } catch (err: any) {
-        console.error("fetchNotes error:", err);
-        setErrorMsg(err.response?.data?.message ?? "Erreur de chargement des notes");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+      const normalized = raw.map((n: any): NoteShape => ({
+        id: n.id,
+        studentId: n.studentId,
+        moduleId: n.moduleId,
+        session: n.session ?? "Normale",
+        ce: toNumberSafe(n.ce),
+        fe: toNumberSafe(n.fe),
+        score: Number(n.score ?? 0),
+        appreciation: n.appreciation ?? "",
+        semester: n.semester ?? n.module?.semester ?? 1,
+        module: n.module
+          ? {
+              id: n.module.id,
+              title: n.module.title,
+              code: n.module.code,
+              credits: n.module.credits ?? 0,
+              semester: n.module.semester ?? 1,
+            }
+          : null,
+        student: n.student
+          ? {
+              id: n.student.id,
+              nom: n.student.nom ?? "",
+              prenom: n.student.prenom ?? "",
+              matricule: n.student.matricule ?? "",
+              promotionId: n.student.promotionId ?? null,
+              promotion: n.student.promotion ?? null,
+            }
+          : null,
+      }));
+
+      setNotes(normalized);
+    } catch (err: any) {
+      console.error("fetchNotes error:", err);
+      setErrorMsg(
+        err.response?.data?.message ??
+          "Erreur de chargement des notes"
+      );
+    } finally {
+      setLoading(false);
+    }
+  })();
+}, []);
 
   /* ---- Calculs ---- */
   const notesS1 = useMemo(() => notes.filter((n) => n.semester === 1), [notes]);

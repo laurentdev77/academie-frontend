@@ -13,6 +13,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LucidePlus, LucideEdit, LucideTrash2, LucideRefreshCw } from "lucide-react";
 
+// 🌐 Définir l'URL du backend dynamiquement
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 interface Filiere {
   id: number;
   nom: string;
@@ -39,7 +42,7 @@ const PromotionsPage: React.FC = () => {
 
   const [openForm, setOpenForm] = useState(false);
   const [editing, setEditing] = useState<Promotion | null>(null);
-  const [form, setForm] = useState({ nom: "", annee: new Date().getFullYear(), filiereId: 0 });
+  const [form, setForm] = useState({ nom: "", annee: new Date().getFullYear(), filiereId: null as number | null });
 
   useEffect(() => {
     fetchFilieres();
@@ -48,7 +51,7 @@ const PromotionsPage: React.FC = () => {
 
   const fetchFilieres = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/filieres", { headers });
+      const res = await axios.get(`${API}/filieres`, { headers });
       setFilieres(res.data || []);
     } catch (err) {
       console.error("Erreur chargement filières:", err);
@@ -59,7 +62,7 @@ const PromotionsPage: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res = await axios.get("http://localhost:5000/api/promotions", { headers });
+      const res = await axios.get(`${API}/promotions`, { headers });
       const data = Array.isArray(res.data) ? res.data : [];
       setPromotions(data);
     } catch (err: any) {
@@ -72,7 +75,7 @@ const PromotionsPage: React.FC = () => {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ nom: "", annee: new Date().getFullYear(), filiereId: 0 });
+    setForm({ nom: "", annee: new Date().getFullYear(), filiereId: null });
     setOpenForm(true);
   };
 
@@ -81,7 +84,7 @@ const PromotionsPage: React.FC = () => {
     setForm({
       nom: promo.nom,
       annee: promo.annee,
-      filiereId: promo.filiereId || 0,
+      filiereId: promo.filiereId ?? null,
     });
     setOpenForm(true);
   };
@@ -96,10 +99,10 @@ const PromotionsPage: React.FC = () => {
 
     try {
       if (editing) {
-        await axios.put(`http://localhost:5000/api/promotions/${editing.id}`, form, { headers });
+        await axios.put(`${API}/promotions/${editing.id}`, form, { headers });
         setSuccessMsg("Promotion mise à jour");
       } else {
-        await axios.post("http://localhost:5000/api/promotions", form, { headers });
+        await axios.post(`${API}/promotions`, form, { headers });
         setSuccessMsg("Promotion ajoutée");
       }
       setOpenForm(false);
@@ -111,20 +114,20 @@ const PromotionsPage: React.FC = () => {
   };
 
   // 🔄 Efface automatiquement les messages après 3 secondes
-useEffect(() => {
-  if (successMsg || errorMsg) {
-    const timer = setTimeout(() => {
-      setSuccessMsg(null);
-      setErrorMsg(null);
-    }, 3000);
-    return () => clearTimeout(timer);
-  }
-}, [successMsg, errorMsg]);
+  useEffect(() => {
+    if (successMsg || errorMsg) {
+      const timer = setTimeout(() => {
+        setSuccessMsg(null);
+        setErrorMsg(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMsg, errorMsg]);
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Supprimer cette promotion ?")) return;
     try {
-      await axios.delete(`http://localhost:5000/api/promotions/${id}`, { headers });
+      await axios.delete(`${API}/promotions/${id}`, { headers });
       setSuccessMsg("Promotion supprimée");
       fetchPromotions();
     } catch (err: any) {
@@ -231,10 +234,12 @@ useEffect(() => {
               <label className="block text-sm">Filière</label>
               <select
                 className="border rounded px-2 py-2 w-full"
-                value={form.filiereId || 0}
-                onChange={(e) => setForm({ ...form, filiereId: Number(e.target.value) })}
+                value={form.filiereId ?? ""}
+                onChange={(e) =>
+                  setForm({ ...form, filiereId: e.target.value ? Number(e.target.value) : null })
+                }
               >
-                <option value={0}>-- Choisir une filière --</option>
+                <option value="">-- Choisir une filière --</option>
                 {filieres.map((f) => (
                   <option key={f.id} value={f.id}>
                     {f.nom}

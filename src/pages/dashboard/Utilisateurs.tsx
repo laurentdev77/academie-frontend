@@ -1,5 +1,4 @@
-// PARTIE 1/3 — Utilisateurs.tsx (début)
-
+// src/pages/dashboard/Utilisateurs.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -25,6 +24,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
+// TYPES
 type Role = { id: number; name: string };
 type Student = {
   id: string;
@@ -53,10 +53,17 @@ type User = {
   createdAt: string;
 };
 
-const API =
-  (import.meta.env.VITE_API_URL as string) || "http://localhost:5000";
+// URL API dynamique
+const API = (import.meta.env.VITE_API_URL as string) || "http://localhost:5000";
+
+// UTILS
+const getPhotoUrl = (url?: string) => {
+  if (!url) return "/default-avatar.png";
+  return url.startsWith("http") ? url : `${API}${url}`;
+};
 
 export default function Utilisateurs() {
+  // STATES
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -69,31 +76,22 @@ export default function Utilisateurs() {
   const [openForm, setOpenForm] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [selectedUserForDetail, setSelectedUserForDetail] =
-    useState<User | null>(null);
+  const [selectedUserForDetail, setSelectedUserForDetail] = useState<User | null>(null);
   const [openDetail, setOpenDetail] = useState(false);
 
-  const [selectedStudentIdToLink, setSelectedStudentIdToLink] = useState<
-    string | ""
-  >("");
-  const [selectedTeacherIdToLink, setSelectedTeacherIdToLink] = useState<
-    string | ""
-  >("");
+  const [selectedStudentIdToLink, setSelectedStudentIdToLink] = useState<string>("");
+  const [selectedTeacherIdToLink, setSelectedTeacherIdToLink] = useState<string>("");
 
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
 
   // ======================
   // FETCH FUNCTIONS
   // ======================
-
   const fetchRoles = async () => {
     try {
       const res = await axios.get(`${API}/users/roles`, { headers });
-      setRoles(
-        Array.isArray(res.data) ? res.data : res.data?.data ?? res.data?.roles
-      );
+      setRoles(Array.isArray(res.data) ? res.data : res.data?.data ?? res.data?.roles);
     } catch (err) {
       console.error("fetchRoles:", err);
     }
@@ -102,9 +100,7 @@ export default function Utilisateurs() {
   const fetchStudents = async () => {
     try {
       const res = await axios.get(`${API}/students`, { headers });
-      setStudents(
-        Array.isArray(res.data) ? res.data : res.data?.data ?? res.data?.rows
-      );
+      setStudents(Array.isArray(res.data) ? res.data : res.data?.data ?? res.data?.rows);
     } catch (err) {
       console.error("fetchStudents:", err);
     }
@@ -113,18 +109,10 @@ export default function Utilisateurs() {
   const fetchTeachers = async () => {
     try {
       const res = await axios.get(`${API}/teachers`, { headers });
-      const data =
-        Array.isArray(res.data) ||
-        res.data?.teacher ||
-        res.data?.teachers ||
-        res.data?.data
-          ? res.data
-          : [];
-      setTeachers(
-        Array.isArray(data)
-          ? data
-          : data?.rows ?? data?.teachers ?? data?.data ?? []
-      );
+      const data = Array.isArray(res.data) || res.data?.teacher || res.data?.teachers || res.data?.data
+        ? res.data
+        : [];
+      setTeachers(Array.isArray(data) ? data : data?.rows ?? data?.teachers ?? data?.data ?? []);
     } catch (err) {
       console.error("fetchTeachers:", err);
     }
@@ -150,6 +138,9 @@ export default function Utilisateurs() {
     fetchUsers();
   }, []);
 
+  // ======================
+  // UPLOAD PHOTO
+  // ======================
   const uploadPhoto = async (file: File) => {
     const fd = new FormData();
     fd.append("photo", file);
@@ -165,15 +156,11 @@ export default function Utilisateurs() {
     }
   };
 
-  const studentsWithoutUser = useMemo(
-    () => students.filter((s) => !s.userId),
-    [students]
-  );
-
-  const teachersWithoutUser = useMemo(
-    () => teachers.filter((t) => !t.userId),
-    [teachers]
-  );
+  // ======================
+  // FILTERS
+  // ======================
+  const studentsWithoutUser = useMemo(() => students.filter((s) => !s.userId), [students]);
+  const teachersWithoutUser = useMemo(() => teachers.filter((t) => !t.userId), [teachers]);
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -193,49 +180,37 @@ export default function Utilisateurs() {
   // ======================
   // SUBMIT FORM
   // ======================
-
   const submitForm = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const form = e.currentTarget;
-    const data = new FormData(form);
+    const formData = new FormData(e.currentTarget);
 
     let photoUrl = editingUser?.photoUrl ?? null;
-
     if (photoFile) {
       const uploaded = await uploadPhoto(photoFile);
       if (uploaded) photoUrl = uploaded;
     }
 
     const payload: any = {
-      username: data.get("username")?.toString().trim(),
-      email: data.get("email")?.toString().trim(),
-      telephone: data.get("telephone")?.toString().trim() || null,
+      username: formData.get("username")?.toString().trim(),
+      email: formData.get("email")?.toString().trim(),
+      telephone: formData.get("telephone")?.toString().trim() || null,
       photoUrl,
-      roleId: data.get("roleId") ? Number(data.get("roleId")) : null,
-      status:
-        (data.get("status")?.toString() as "active" | "inactive") || "inactive",
+      roleId: formData.get("roleId") ? Number(formData.get("roleId")) : null,
+      status: (formData.get("status")?.toString() as "active" | "inactive") || "inactive",
     };
 
-    // Mot de passe uniquement si modifié
-    const pw = data.get("password")?.toString();
+    const pw = formData.get("password")?.toString();
     if (!editingUser || pw) payload.password = pw;
 
     try {
       setLoading(true);
 
-      // 🔵 UPDATE
       if (editingUser) {
-        const res = await axios.put(
-          `${API}/users/${editingUser.id}`,
-          payload,
-          { headers }
-        );
+        // UPDATE
+        const res = await axios.put(`${API}/users/${editingUser.id}`, payload, { headers });
         const updatedUser = res.data?.user ?? res.data ?? null;
-
         if (updatedUser) {
-          setUsers((prev) =>
-            prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
-          );
+          setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
         } else {
           await fetchUsers();
         }
@@ -265,16 +240,12 @@ export default function Utilisateurs() {
         }
 
         alert("Utilisateur mis à jour");
-
       } else {
-        // 🟢 CREATE
+        // CREATE
         const res = await axios.post(`${API}/users`, payload, { headers });
-        const newUser = res.data ?? res.data?.user ?? null;
-        if (newUser) {
-          setUsers((prev) => [newUser, ...prev]);
-        }
+        const newUser = res.data?.user ?? res.data ?? null;
+        if (newUser) setUsers((prev) => [newUser, ...prev]);
 
-        // Link Student
         if (selectedStudentIdToLink) {
           await axios.put(
             `${API}/users/${newUser.id}/link-student/${selectedStudentIdToLink}`,
@@ -286,7 +257,6 @@ export default function Utilisateurs() {
           setSelectedStudentIdToLink("");
         }
 
-        // Link Teacher
         if (selectedTeacherIdToLink) {
           await axios.put(
             `${API}/teachers/link-user/${selectedTeacherIdToLink}`,
@@ -315,7 +285,6 @@ export default function Utilisateurs() {
   // ======================
   // DELETE USER
   // ======================
-
   const deleteUser = async (id: string) => {
     if (!confirm("Supprimer cet utilisateur ?")) return;
     try {
