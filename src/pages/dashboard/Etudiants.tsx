@@ -234,24 +234,33 @@ export default function Etudiants() {
   }
 
   /* ===== Upload photo ===== */
-  async function handlePhotoUpload(evt: React.ChangeEvent<HTMLInputElement>) {
-    const file = evt.target.files?.[0];
-    if (!file) return;
-    const fd = new FormData();
-    fd.append("photo", file);
-    try {
-      const res = await axios.post(`${API_BASE}/students/upload-photo`, fd, {
-        headers: { ...headers, "Content-Type": "multipart/form-data" },
-      });
-      const url = res.data?.url ?? res.data?.fileUrl ?? null;
-      if (url) setForm((f) => ({ ...f, photoUrl: url }));
-      setSuccessMsg(url ? "Photo téléversée avec succès" : "Aucune URL reçue après upload");
-    } catch (err) {
-      console.error("upload error:", err);
-      setErrorMsg("Erreur lors du téléversement de la photo");
-    }
-  }
+ async function handlePhotoUpload(evt: React.ChangeEvent<HTMLInputElement>) {
+  const file = evt.target.files?.[0];
+  if (!file) return;
 
+  const fd = new FormData();
+  fd.append("photo", file);
+
+  try {
+    const res = await axios.post(
+      `${API_BASE}/upload-photo`, // route backend correcte
+      fd,
+      { headers: { ...headers, "Content-Type": "multipart/form-data" } }
+    );
+
+    const url = res.data?.url ?? res.data?.fileUrl ?? "";
+
+    if (url) {
+      setForm((f) => ({ ...f, photoUrl: url }));
+      setSuccessMsg("Photo téléversée avec succès");
+    } else {
+      setErrorMsg("Aucune URL reçue après upload");
+    }
+  } catch (err) {
+    console.error("upload error:", err);
+    setErrorMsg("Erreur lors du téléversement de la photo");
+  }
+}
   /* ===== CRUD ===== */
   function openAddForm() {
     setEditing(null);
@@ -427,7 +436,7 @@ export default function Etudiants() {
                 <td className="px-3 py-2">{s.matricule || "—"}</td>
                 <td className="px-3 py-2 font-medium">{s.nom}</td>
                 <td className="px-3 py-2">{s.prenom || "—"}</td>
-                <td className="px-3 py-2">{s.sexe || "—"}</td>
+                <td className="px-3 py-2">{s.sexe === "M"? "Masculin": s.sexe === "F"? "Féminin": s.sexe === "Autre"? "Autre": "—"}</td>
                 <td className="px-3 py-2">{s.user?.telephone || "—"}</td>
                 <td className="px-3 py-2">{s.dateNaissance ? new Date(s.dateNaissance).toLocaleDateString() : "—"}</td>
                 <td className="px-3 py-2">{s.user?.email || "—"}</td>
@@ -464,8 +473,9 @@ export default function Etudiants() {
               <Input placeholder="Grade" value={form.grade} onChange={(e) => setForm({...form, grade: e.target.value})} />
               <Select value={form.sexe} onChange={(e) => setForm({...form, sexe: e.target.value})}>
                 <option value="">— Sexe —</option>
-                <option value="Masculin">Masculin</option>
-                <option value="Féminin">Féminin</option>
+                <option value="M">Masculin</option>
+                <option value="F">Féminin</option>
+                <option value="Autre">Autre</option>
               </Select>
               <Input type="date" placeholder="Date naissance" value={form.dateNaissance} onChange={(e) => setForm({...form, dateNaissance: e.target.value})} />
               <Input placeholder="Lieu naissance" value={form.lieuNaissance} onChange={(e) => setForm({...form, lieuNaissance: e.target.value})} />
@@ -481,7 +491,16 @@ export default function Etudiants() {
                 <option value="">— Promotion —</option>
                 {filteredPromotions.map(p => <option key={p.id} value={p.id}>{p.nom}</option>)}
               </Select>
+              <div className="flex flex-col gap-2">
               <Input type="file" onChange={handlePhotoUpload} />
+                {form.photoUrl && (
+                  <img
+                  src={API_BASE.replace("/api", "") + form.photoUrl} 
+                  alt="Aperçu photo"
+                  className="w-24 h-24 object-cover rounded border mt-2"
+                  />
+                )}
+              </div>
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => setShowForm(false)}>Annuler</Button>
