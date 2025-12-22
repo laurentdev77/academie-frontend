@@ -57,6 +57,9 @@ type User = {
 const PAGE_SIZE_OPTIONS = [8, 12, 20];
 const API = (import.meta.env.VITE_API_URL as string) || "http://localhost:5000";
 
+const BACKEND_BASE = API.replace("/api", "");
+const DEFAULT_AVATAR = "/default-avatar.png";
+
 const EnseignantsPage: React.FC = () => {
   const token = localStorage.getItem("token");
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -165,11 +168,11 @@ const EnseignantsPage: React.FC = () => {
   }, [search, gradeFilter, specFilter]);
 
   const getPhotoUrl = (path?: string | null) => {
-    if (!path) return null;
-    if (path.startsWith("http")) return path;
-    const normalized = path.startsWith("/") ? path : `/${path}`;
-    return `${API}${normalized}`;
-  };
+  if (!path) return DEFAULT_AVATAR;
+  if (path.startsWith("http")) return path;
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${BACKEND_BASE}${normalized}`;
+};
 
   const openCreate = () => {
     setEditing(null);
@@ -448,7 +451,8 @@ const EnseignantsPage: React.FC = () => {
                     {paginated.items.map((t) => (
                       <tr key={String(t.id)} className="border-t hover:bg-gray-50">
                         <td className="px-3 py-2">
-                          {t.photoUrl ? <img src={getPhotoUrl(t.photoUrl) || undefined} alt={t.nom} className="w-12 h-12 rounded-full object-cover" /> :
+                          {t.photoUrl ? <img src={getPhotoUrl(t.photoUrl)} onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)} alt={t.nom}
+                          className="w-12 h-12 rounded-full object-cover"/> :
                           <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center text-sm text-gray-500">N/A</div>}
                         </td>
                         <td className="px-3 py-2">
@@ -535,10 +539,10 @@ const EnseignantsPage: React.FC = () => {
               <input type="file" accept="image/*" onChange={handleFileChange} />
               {photoFile && <div className="text-sm mt-1">{photoFile.name}</div>}
               <div className="w-24 h-24 rounded-full overflow-hidden border mt-3">
-                <img src={photoFile ? URL.createObjectURL(photoFile) : getPhotoUrl(editing?.photoUrl ?? "") ?? undefined} alt="preview" className="w-full h-full object-cover" />
+                <img src={photoFile? URL.createObjectURL(photoFile): getPhotoUrl(editing?.photoUrl)}
+                onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)} alt="preview" className="w-full h-full object-cover"/>
               </div>
             </div>
-
             <DialogFooter className="col-span-2 pt-4">
               <Button type="button" variant="outline" onClick={() => setOpenForm(false)}>Annuler</Button>
               <Button type="submit" className="ml-2">{editing ? "Mettre à jour" : "Enregistrer"}</Button>
@@ -554,7 +558,8 @@ const EnseignantsPage: React.FC = () => {
           {editing && (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
-                {editing.photoUrl ? <img src={getPhotoUrl(editing.photoUrl) || undefined} alt="photo" className="w-20 h-20 rounded-full object-cover" /> :
+                {editing.photoUrl ? <img src={getPhotoUrl(editing.photoUrl)} onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)} alt="photo"
+                  className="w-20 h-20 rounded-full object-cover"/> :
                 <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center text-sm text-gray-500">N/A</div>}
                 <div>
                   <div className="text-lg font-semibold">{editing.nom} {editing.prenom}</div>

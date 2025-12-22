@@ -48,6 +48,9 @@ const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) 
   </select>
 );
 
+const BACKEND_BASE = API_BASE.replace("/api", "");
+const DEFAULT_AVATAR = "/default-avatar.png";
+
 export default function Etudiants() {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
@@ -495,10 +498,18 @@ export default function Etudiants() {
               <Input type="file" onChange={handlePhotoUpload} />
                 {form.photoUrl && (
                   <img
-                  src={API_BASE.replace("/api", "") + form.photoUrl} 
-                  alt="Aperçu photo"
-                  className="w-24 h-24 object-cover rounded border mt-2"
+                    src={
+                      form.photoUrl?.startsWith("http")
+                        ? form.photoUrl
+                        : form.photoUrl
+                        ? BACKEND_BASE + form.photoUrl
+                        : DEFAULT_AVATAR
+                    }
+                    onError={(e) => (e.currentTarget.src = DEFAULT_AVATAR)}
+                    alt="Aperçu photo"
+                    className="w-24 h-24 object-cover rounded border mt-2"
                   />
+
                 )}
               </div>
             </div>
