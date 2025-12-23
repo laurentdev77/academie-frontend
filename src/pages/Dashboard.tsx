@@ -1,4 +1,3 @@
-// src/pages/Dashboard.tsx
 import React, { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import api from "../utils/axiosConfig";
@@ -34,7 +33,10 @@ const Dashboard: React.FC = () => {
         ]);
 
         setUser(profileRes.data.user);
-        setStats(statsRes.data);
+
+        // ✅ FIX ICI : on prend stats.stats
+        setStats(statsRes.data.stats);
+
       } catch (err: any) {
         console.error("fetch error:", err);
         setError("Impossible de charger le profil ou les statistiques.");

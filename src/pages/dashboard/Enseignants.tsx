@@ -213,41 +213,50 @@ const EnseignantsPage: React.FC = () => {
   };
 
   const handleFileChange = (evt: React.ChangeEvent<HTMLInputElement>) => {
-    setPhotoFile(evt.target.files?.[0] ?? null);
-  };
+  setPhotoFile(evt.target.files?.[0] ?? null);
+};
 
-  const uploadPhoto = async (teacherId: string | number, file: File | null) => {
-    if (!file) return null;
-    try {
-      const fd = new FormData();
-      fd.append("photo", file);
+const uploadPhoto = async (
+  teacherId: string | number,
+  file: File | null
+) => {
+  if (!file) return null;
 
-      try {
-        const res = await axios.post(`${API}/teachers/${teacherId}/photo`, fd, {
-          headers: { ...headers, "Content-Type": "multipart/form-data" },
-        });
-        return res.data?.photoUrl ?? res.data?.url ?? null;
-      } catch (errInner: any) {
-        console.info("teacher-specific upload failed, falling back", errInner?.response?.status);
+  try {
+    const fd = new FormData();
+    fd.append("photo", file);
+
+    // ✅ upload unique via la route EXISTANTE
+    const res = await axios.post(
+      `${API}/upload-photo`,
+      fd,
+      {
+        headers: {
+          ...headers,
+          "Content-Type": "multipart/form-data",
+        },
       }
+    );
 
-      const res2 = await axios.post(`${API}/upload-photo`, fd, {
-        headers: { ...headers, "Content-Type": "multipart/form-data" },
-      });
-      const returnedUrl = res2.data?.url ?? res2.data?.photoUrl ?? null;
+    const photoUrl = res.data?.url ?? res.data?.photoUrl ?? null;
+    if (!photoUrl) return null;
 
-      if (returnedUrl) {
-        try {
-          await axios.put(`${API}/teachers/${teacherId}`, { photoUrl: returnedUrl }, { headers });
-        } catch {}
-      }
-      return returnedUrl ?? null;
-    } catch (err: any) {
-      console.error("uploadPhoto error:", err);
-      setErrorMsg(err?.response?.data?.message || "Erreur upload photo");
-      return null;
-    }
-  };
+    // ✅ liaison explicite de la photo à l’enseignant
+    await axios.put(
+      `${API}/teachers/${teacherId}`,
+      { photoUrl },
+      { headers }
+    );
+
+    return photoUrl;
+  } catch (err: any) {
+    console.error("uploadPhoto error:", err);
+    setErrorMsg(
+      err?.response?.data?.message || "Erreur lors du téléversement de la photo"
+    );
+    return null;
+  }
+};
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
