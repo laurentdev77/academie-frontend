@@ -30,11 +30,11 @@ const Dashboard: React.FC = () => {
       try {
         const [profileRes, statsRes] = await Promise.all([
           api.get("/auth/profile"),
-          api.get("/api/dashboard/stats"), // ← Correction ici
+          api.get("/dashboard/stats"),
         ]);
 
         setUser(profileRes.data.user);
-        setStats(statsRes.data.stats); // ← accéder à "stats" dans la réponse backend
+        setStats(statsRes.data.stats); // <-- correction ici
       } catch (err: any) {
         console.error("fetch error:", err);
         setError("Impossible de charger le profil ou les statistiques.");
