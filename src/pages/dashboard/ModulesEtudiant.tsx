@@ -18,6 +18,20 @@ import {
   LucideX,
 } from "lucide-react";
 
+/* ======================= URL FIX (HTTPS + Render) ======================= */
+const API_BASE =
+  (import.meta.env.VITE_API_URL as string) || "http://localhost:5000";
+
+const BACKEND_BASE = API_BASE.replace("/api", "");
+
+const fixUrl = (url?: string | null) => {
+  if (!url) return "";
+  if (url.startsWith("http")) {
+    return url.replace("http://", "https://");
+  }
+  return `${BACKEND_BASE}${url.startsWith("/") ? url : `/${url}`}`;
+};
+
 /* ------------------------- Types ------------------------- */
 type Resource = {
   id: string;
@@ -147,7 +161,7 @@ export default function ModulesEtudiant() {
       setVideoPreview(r);
     } else {
       // open files/links in new tab
-      window.open(r.url, "_blank", "noopener,noreferrer");
+      window.open(fixUrl(r.url), "_blank", "noopener,noreferrer");
     }
     if (!seen.includes(r.id)) setSeen((s) => [...s, r.id]);
   };
@@ -159,7 +173,7 @@ export default function ModulesEtudiant() {
   const downloadResource = (r: Resource) => {
     // download via anchor
     const link = document.createElement("a");
-    link.href = r.url;
+    link.href = fixUrl(r.url);
     link.download = r.title || "resource";
     document.body.appendChild(link);
     link.click();
@@ -178,7 +192,7 @@ export default function ModulesEtudiant() {
       await Promise.all(
         mod.resources.map(async (r) => {
           try {
-            const resp = await fetch(r.url);
+            const resp = await fetch(fixUrl(r.url));
             const blob = await resp.blob();
             // ensure safe filename
             const ext = r.type === "pdf" ? ".pdf" : "";
@@ -397,7 +411,9 @@ export default function ModulesEtudiant() {
                               <div className="bg-gray-50 p-3 rounded">
                                 <video
                                   controls
-                                  src={selectedModule.resources.find((x) => x.type === "video")?.url}
+                                  src={fixUrl(
+                                  selectedModule.resources.find((x) => x.type === "video")?.url
+                                  )}
                                   className="w-full max-h-72 rounded"
                                 />
                               </div>
@@ -411,7 +427,9 @@ export default function ModulesEtudiant() {
                               <div className="bg-gray-50 p-3 rounded">
                                 <iframe
                                   title="aperçu-pdf"
-                                  src={selectedModule.resources.find((x) => x.type === "pdf")?.url}
+                                  src={fixUrl(
+                                  selectedModule.resources.find((x) => x.type === "pdf")?.url
+                                  )}
                                   className="w-full h-64 rounded border"
                                 />
                               </div>
@@ -447,7 +465,7 @@ export default function ModulesEtudiant() {
                   <button className="p-2" onClick={() => setPdfPreview(null)}><LucideX className="w-5 h-5" /></button>
                 </div>
               </div>
-              <iframe src={pdfPreview.url} className="w-full h-full" title={pdfPreview.title} />
+              <iframe src={fixUrl(pdfPreview.url)} className="w-full h-full" title={pdfPreview.title} />
             </div>
           </div>
         )}
@@ -465,7 +483,7 @@ export default function ModulesEtudiant() {
                   <button className="p-2" onClick={() => setVideoPreview(null)}><LucideX className="w-5 h-5" /></button>
                 </div>
               </div>
-              <video controls src={videoPreview.url} className="w-full h-96 bg-black" />
+              <video controls src={fixUrl(videoPreview.url)} className="w-full h-96 bg-black" />
             </div>
           </div>
         )}
