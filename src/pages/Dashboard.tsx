@@ -34,7 +34,8 @@ const Dashboard: React.FC = () => {
         ]);
 
         setUser(profileRes.data.user);
-        setStats(statsRes.data.stats); // <-- correction ici
+        // ✅ Récupérer uniquement le sous-objet stats
+        setStats(statsRes.data.stats);
       } catch (err: any) {
         console.error("fetch error:", err);
         setError("Impossible de charger le profil ou les statistiques.");
