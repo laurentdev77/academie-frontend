@@ -1,6 +1,6 @@
 // src/pages/dashboard/ModulesEtudiant.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import api from "@/services/api"; // ✅ IMPORTANT
+import api from "@/services/api";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { Button } from "@/components/ui/button";
@@ -18,17 +18,13 @@ import {
   LucideX,
 } from "lucide-react";
 
-/* ======================= URL FIX (HTTPS + Render) ======================= */
+/* ======================= URL FIX ======================= */
 const API_BASE =
   (import.meta.env.VITE_API_URL as string) || "http://localhost:5000";
-
 const BACKEND_BASE = API_BASE.replace("/api", "");
-
 const fixUrl = (url?: string | null) => {
   if (!url) return "";
-  if (url.startsWith("http")) {
-    return url.replace("http://", "https://");
-  }
+  if (url.startsWith("http")) return url.replace("http://", "https://");
   return `${BACKEND_BASE}${url.startsWith("/") ? url : `/${url}`}`;
 };
 
@@ -67,13 +63,10 @@ export default function ModulesEtudiant() {
 
   const [modules, setModules] = useState<ModuleShape[]>([]);
   const [promotion, setPromotion] = useState<PromotionInfo | null>(null);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [selectedModule, setSelectedModule] = useState<ModuleShape | null>(null);
   const [query, setQuery] = useState("");
-
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
       const raw = localStorage.getItem("prefers_dark");
@@ -83,12 +76,10 @@ export default function ModulesEtudiant() {
     }
   });
 
-  // modal states
   const [pdfPreview, setPdfPreview] = useState<Resource | null>(null);
   const [videoPreview, setVideoPreview] = useState<Resource | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
 
-  /* seen resources stored locally */
   const seenKey = "seen_resources";
   const getSeen = () => {
     try {
@@ -103,45 +94,39 @@ export default function ModulesEtudiant() {
   useEffect(() => {
     localStorage.setItem(seenKey, JSON.stringify(seen));
   }, [seen]);
-
   useEffect(() => {
     localStorage.setItem("prefers_dark", JSON.stringify(darkMode));
   }, [darkMode]);
 
-  /* ------------------------- Fetch modules ------------------------- */
   const fetchModules = async () => {
-  setLoading(true);
-  setError(null);
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.get("/students/mes-modules", { headers });
+      const data = res.data;
 
-  try {
-    const res = await api.get("/students/mes-modules"); // ✅ Render OK
-    const data = res.data;
-
-    setPromotion(data.promotion ?? null);
-    setModules(Array.isArray(data.modules) ? data.modules : []);
-
-    setSelectedModule(
-      Array.isArray(data.modules) && data.modules.length > 0
-        ? data.modules[0]
-        : null
-    );
-  } catch (err: any) {
-    console.error("fetchModules error:", err);
-    setError(
-      err.response?.data?.message ??
-        "Erreur lors du chargement des modules."
-    );
-  } finally {
-    setLoading(false);
-  }
-};
+      console.log("Fetched modules:", data.modules); // debug
+      setPromotion(data.promotion ?? null);
+      setModules(Array.isArray(data.modules) ? data.modules : []);
+      setSelectedModule(
+        Array.isArray(data.modules) && data.modules.length > 0
+          ? data.modules[0]
+          : null
+      );
+    } catch (err: any) {
+      console.error("fetchModules error:", err);
+      setError(
+        err.response?.data?.message ?? "Erreur lors du chargement des modules."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchModules();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ------------------------- Filtering ------------------------- */
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return modules;
@@ -153,16 +138,10 @@ export default function ModulesEtudiant() {
     );
   }, [modules, query]);
 
-  /* ------------------------- Resource actions ------------------------- */
   const openResource = (r: Resource) => {
-    if (r.type === "pdf") {
-      setPdfPreview(r);
-    } else if (r.type === "video") {
-      setVideoPreview(r);
-    } else {
-      // open files/links in new tab
-      window.open(fixUrl(r.url), "_blank", "noopener,noreferrer");
-    }
+    if (r.type === "pdf") setPdfPreview(r);
+    else if (r.type === "video") setVideoPreview(r);
+    else window.open(fixUrl(r.url), "_blank", "noopener,noreferrer");
     if (!seen.includes(r.id)) setSeen((s) => [...s, r.id]);
   };
 
@@ -171,7 +150,6 @@ export default function ModulesEtudiant() {
   };
 
   const downloadResource = (r: Resource) => {
-    // download via anchor
     const link = document.createElement("a");
     link.href = fixUrl(r.url);
     link.download = r.title || "resource";
@@ -181,20 +159,16 @@ export default function ModulesEtudiant() {
     if (!seen.includes(r.id)) setSeen((s) => [...s, r.id]);
   };
 
-  /* ------------------------- ZIP download ------------------------- */
   const downloadAllZip = async (mod: ModuleShape) => {
     if (!mod.resources || mod.resources.length === 0) return;
-
     try {
       const zip = new JSZip();
       const folder = zip.folder((mod.title || "module").replace(/\s+/g, "_"))!;
-      // fetch each resource (skip external non-file links that don't respond with blob)
       await Promise.all(
         mod.resources.map(async (r) => {
           try {
             const resp = await fetch(fixUrl(r.url));
             const blob = await resp.blob();
-            // ensure safe filename
             const ext = r.type === "pdf" ? ".pdf" : "";
             const filename = `${(r.title || "resource").replace(/[^\w.-]/g, "_")}${ext}`;
             folder.file(filename, blob);
@@ -211,14 +185,6 @@ export default function ModulesEtudiant() {
     }
   };
 
-  /* ------------------------- Helpers ------------------------- */
-  const avatarInitials = (name?: string) => {
-    if (!name) return "AM";
-    const parts = name.split(" ");
-    return (parts[0]?.[0] ?? "A") + (parts[1]?.[0] ?? "M");
-  };
-
-  /* ------------------------- Render ------------------------- */
   return (
     <div className={darkMode ? "dark" : ""}>
       <div className={`min-h-screen ${darkMode ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"}`}>
@@ -226,11 +192,7 @@ export default function ModulesEtudiant() {
           {/* Top bar */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
-              <button
-                onClick={() => setSidebarOpen((s) => !s)}
-                className={`p-2 rounded ${darkMode ? "bg-gray-800" : "bg-white"} shadow`}
-                title="Toggle menu"
-              >
+              <button onClick={() => setSidebarOpen((s) => !s)} className={`p-2 rounded ${darkMode ? "bg-gray-800" : "bg-white"} shadow`} title="Toggle menu">
                 <LucideMenu className="w-5 h-5" />
               </button>
 
@@ -238,7 +200,7 @@ export default function ModulesEtudiant() {
 
               {promotion && (
                 <div className={`ml-4 px-3 py-1 rounded text-sm ${darkMode ? "bg-gray-800" : "bg-white"} border`}>
-                  {promotion.nom} — {promotion.annee}
+                  {promotion.nom ?? "—"} — {promotion.annee ?? "—"}
                 </div>
               )}
             </div>
@@ -253,40 +215,22 @@ export default function ModulesEtudiant() {
                   className="outline-none bg-transparent text-sm w-64"
                 />
               </div>
-
               <Button onClick={fetchModules} variant="outline">Rafraîchir</Button>
-
-              <button
-                onClick={() => setDarkMode((d) => !d)}
-                className={`p-2 rounded ${darkMode ? "bg-gray-700 text-yellow-300" : "bg-white"} shadow`}
-                title="Toggle dark"
-              >
+              <button onClick={() => setDarkMode((d) => !d)} className={`p-2 rounded ${darkMode ? "bg-gray-700 text-yellow-300" : "bg-white"} shadow`} title="Toggle dark">
                 {darkMode ? <LucideSun className="w-5 h-5" /> : <LucideMoon className="w-5 h-5" />}
               </button>
             </div>
           </div>
 
+          {/* Main grid */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            {/* Sidebar - Moodle-like */}
+            {/* Sidebar */}
             <aside className={`md:col-span-3 ${sidebarOpen ? "" : "hidden md:block"}`}>
               <div className={`p-4 rounded shadow ${darkMode ? "bg-gray-800" : "bg-white"}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold ${darkMode ? "bg-yellow-400 text-gray-900" : "bg-yellow-300 text-gray-900"}`}>
-                    AM
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold">Académie Militaire</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Espace étudiant</div>
-                  </div>
-                </div>
-
                 <nav className="space-y-2">
                   <button
                     className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                    onClick={() => {
-                      // select first module quickly
-                      if (modules.length) setSelectedModule(modules[0]);
-                    }}
+                    onClick={() => { if (modules.length) setSelectedModule(modules[0]); }}
                   >
                     Tableau de bord
                   </button>
@@ -300,8 +244,8 @@ export default function ModulesEtudiant() {
                         className={`w-full text-left px-2 py-2 rounded flex items-center justify-between ${selectedModule?.id === m.id ? (darkMode ? "bg-gray-700 text-white" : "bg-blue-50") : "hover:bg-gray-100 dark:hover:bg-gray-700"}`}
                       >
                         <div>
-                          <div className="text-sm font-medium">{m.title}</div>
-                          <div className="text-xs text-gray-400">{m.code}</div>
+                          <div className="text-sm font-medium">{m.title ?? "—"}</div>
+                          <div className="text-xs text-gray-400">{m.code ?? "—"}</div>
                         </div>
                         <div className="text-xs text-gray-400">{m.resources?.length ?? 0}</div>
                       </button>
@@ -311,182 +255,75 @@ export default function ModulesEtudiant() {
               </div>
             </aside>
 
-            {/* Main */}
+            {/* Content */}
             <main className="md:col-span-9">
-              {/* Modules list + details */}
-              <div className="grid md:grid-cols-3 gap-4 mb-4">
-                <div className="md:col-span-1">
-                  <Card className={`${darkMode ? "bg-gray-800" : "bg-white"}`}>
-                    <CardContent>
-                      <div className="text-xs text-gray-500 mb-2">Liste</div>
-                      {loading ? (
-                        <div>Chargement...</div>
-                      ) : filtered.length === 0 ? (
-                        <div className="text-sm text-gray-500">Aucun module trouvé.</div>
-                      ) : (
-                        filtered.map((m) => (
-                          <div
-                            key={m.id}
-                            className={`p-3 rounded mb-2 cursor-pointer ${selectedModule?.id === m.id ? "bg-blue-50 dark:bg-gray-700" : ""}`}
-                            onClick={() => setSelectedModule(m)}
-                          >
-                            <div className="font-semibold">{m.title}</div>
-                            <div className="text-xs text-gray-400">{m.code} • {m.credits ?? "—"} crédits</div>
-                            <div className="text-xs text-gray-500">Enseignant: {m.teacher?.username ?? "—"}</div>
-                          </div>
-                        ))
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="md:col-span-2">
-                  {selectedModule ? (
-                    <Card className={`${darkMode ? "bg-gray-800" : "bg-white"}`}>
-                      <CardHeader>
-                        <CardTitle>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-lg font-semibold">{selectedModule.title}</div>
-                              <div className="text-xs text-gray-400">{selectedModule.code} • {selectedModule.teacher?.username ?? "—"}</div>
+              {selectedModule ? (
+                <Card className={`${darkMode ? "bg-gray-800" : "bg-white"}`}>
+                  <CardHeader>
+                    <CardTitle>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-lg font-semibold">{selectedModule.title ?? "—"}</div>
+                          <div className="text-xs text-gray-400">{selectedModule.code ?? "—"} • {selectedModule.teacher?.username ?? "—"}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-xs text-gray-400 mr-2">Promotion: {selectedModule.promotion?.nom ?? "—"}</div>
+                          <Button size="sm" variant="outline" onClick={() => downloadAllZip(selectedModule)}>
+                            <LucideArchive className="w-4 h-4" /> Tout télécharger
+                          </Button>
+                        </div>
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-gray-400 mb-4">{selectedModule.description ?? "Aucune description fournie."}</p>
+                    {/* resources */}
+                    {(!selectedModule.resources || selectedModule.resources.length === 0) ? (
+                      <div className="p-3 bg-gray-50 rounded text-sm">Aucune ressource disponible.</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {selectedModule.resources.map((r) => (
+                          <div key={r.id} className={`flex items-center justify-between p-3 rounded border ${darkMode ? "border-gray-700" : ""}`}>
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                                {r.type === "video" ? <LucideVideo className="w-5 h-5" /> : <LucideFileText className="w-5 h-5" />}
+                              </div>
+                              <div>
+                                <div className="font-medium">{r.title ?? "—"}</div>
+                                <div className="text-xs text-gray-400">{r.description ?? ""}</div>
+                                <div className="text-xs text-gray-500 mt-1">{r.createdAt ? new Date(r.createdAt).toLocaleString() : ""}</div>
+                              </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <div className="text-xs text-gray-400 mr-2">Promotion: {selectedModule.promotion?.nom ?? "—"}</div>
-                              <Button size="sm" variant="outline" onClick={() => downloadAllZip(selectedModule)}>
-                                <LucideArchive className="w-4 h-4" /> Tout télécharger
-                              </Button>
+                              <Button size="sm" onClick={() => openResource(r)}>Ouvrir</Button>
+                              {r.type !== "video" && (
+                                <Button size="sm" variant="outline" onClick={() => downloadResource(r)}>
+                                  <LucideDownload className="w-4 h-4" />
+                                </Button>
+                              )}
+                              <button
+                                className={`p-2 rounded ${seen.includes(r.id) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
+                                onClick={() => toggleSeen(r.id)}
+                                title={seen.includes(r.id) ? "Marqué comme non lu" : "Marquer comme lu"}
+                              >
+                                <LucideEye className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
-                        </CardTitle>
-                      </CardHeader>
-
-                      <CardContent>
-                        <p className="text-sm text-gray-400 mb-4">{selectedModule.description ?? "Aucune description fournie."}</p>
-
-                        {(!selectedModule.resources || selectedModule.resources.length === 0) ? (
-                          <div className="p-3 bg-gray-50 rounded text-sm">Aucune ressource disponible.</div>
-                        ) : (
-                          <div className="space-y-3">
-                            {selectedModule.resources.map((r) => (
-                              <div key={r.id} className={`flex items-center justify-between p-3 rounded border ${darkMode ? "border-gray-700" : ""}`}>
-                                <div className="flex items-center gap-3">
-                                  <div className="w-12 h-12 rounded bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                                    {r.type === "video" ? <LucideVideo className="w-5 h-5" /> : <LucideFileText className="w-5 h-5" />}
-                                  </div>
-                                  <div>
-                                    <div className="font-medium">{r.title}</div>
-                                    <div className="text-xs text-gray-400">{r.description ?? ""}</div>
-                                    <div className="text-xs text-gray-500 mt-1">{r.createdAt ? new Date(r.createdAt).toLocaleString() : ""}</div>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                  <Button size="sm" onClick={() => openResource(r)}>Ouvrir</Button>
-
-                                  {r.type !== "video" && (
-                                    <Button size="sm" variant="outline" onClick={() => downloadResource(r)}>
-                                      <LucideDownload className="w-4 h-4" />
-                                    </Button>
-                                  )}
-
-                                  <button
-                                    className={`p-2 rounded ${seen.includes(r.id) ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}
-                                    onClick={() => toggleSeen(r.id)}
-                                    title={seen.includes(r.id) ? "Marqué comme non lu" : "Marquer comme lu"}
-                                  >
-                                    <LucideEye className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* preview area for first video / pdf */}
-                        <div className="mt-6 space-y-4">
-                          {/* video preview (small) */}
-                          {selectedModule.resources?.some((x) => x.type === "video") && (
-                            <div>
-                              <div className="text-sm font-medium mb-2">Aperçu vidéo</div>
-                              <div className="bg-gray-50 p-3 rounded">
-                                <video
-                                  controls
-                                  src={fixUrl(
-                                  selectedModule.resources.find((x) => x.type === "video")?.url
-                                  )}
-                                  className="w-full max-h-72 rounded"
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* pdf preview (small) */}
-                          {selectedModule.resources?.some((x) => x.type === "pdf") && (
-                            <div>
-                              <div className="text-sm font-medium mb-2">Aperçu PDF</div>
-                              <div className="bg-gray-50 p-3 rounded">
-                                <iframe
-                                  title="aperçu-pdf"
-                                  src={fixUrl(
-                                  selectedModule.resources.find((x) => x.type === "pdf")?.url
-                                  )}
-                                  className="w-full h-64 rounded border"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <div className={`p-6 rounded ${darkMode ? "bg-gray-800" : "bg-white"}`}>
-                      Sélectionne un module pour voir les ressources.
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className={`p-6 rounded ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+                  Sélectionne un module pour voir les ressources.
                 </div>
-              </div>
-
-              {/* Errors */}
+              )}
               {error && <div className="text-red-600 mb-4">{error}</div>}
             </main>
           </div>
         </div>
-
-        {/* PDF Modal */}
-        {pdfPreview && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-4xl h-[80vh] bg-white rounded overflow-hidden">
-              <div className="flex items-center justify-between p-3 border-b">
-                <div className="font-semibold">{pdfPreview.title}</div>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => downloadResource(pdfPreview)}>
-                    <LucideDownload className="w-4 h-4" /> Télécharger
-                  </Button>
-                  <button className="p-2" onClick={() => setPdfPreview(null)}><LucideX className="w-5 h-5" /></button>
-                </div>
-              </div>
-              <iframe src={fixUrl(pdfPreview.url)} className="w-full h-full" title={pdfPreview.title} />
-            </div>
-          </div>
-        )}
-
-        {/* Video Modal */}
-        {videoPreview && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-3xl bg-white rounded overflow-hidden">
-              <div className="flex items-center justify-between p-3 border-b">
-                <div className="font-semibold">{videoPreview.title}</div>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => downloadResource(videoPreview)}>
-                    <LucideDownload className="w-4 h-4" /> Télécharger
-                  </Button>
-                  <button className="p-2" onClick={() => setVideoPreview(null)}><LucideX className="w-5 h-5" /></button>
-                </div>
-              </div>
-              <video controls src={fixUrl(videoPreview.url)} className="w-full h-96 bg-black" />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

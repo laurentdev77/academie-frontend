@@ -6,10 +6,35 @@ const API = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "https://academi
 interface Presence {
   id: number;
   date: string;
-  module: string;
+  module: string | { title: string }; // module peut être string ou objet
   status: "present" | "absent";
   motif?: string;
 }
+
+// Helper pour formater les dates
+const formatDate = (isoDate: string) => {
+  const d = new Date(isoDate);
+  return d.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+// Badge visuel pour le statut
+const StatusBadge: React.FC<{ status: "present" | "absent" }> = ({ status }) => {
+  const colors = {
+    present: "bg-green-100 text-green-800",
+    absent: "bg-red-100 text-red-800",
+  };
+  return (
+    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colors[status]}`}>
+      {status === "present" ? "Présent" : "Absent"}
+    </span>
+  );
+};
 
 const PresenceEtudiant: React.FC = () => {
   const [list, setList] = useState<Presence[]>([]);
@@ -23,7 +48,7 @@ const PresenceEtudiant: React.FC = () => {
     }
 
     axios
-      .get(`${API}/presence/student/my`, {
+      .get(`${API}/presence/me`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
@@ -61,10 +86,10 @@ const PresenceEtudiant: React.FC = () => {
           ) : (
             list.map((p) => (
               <tr key={p.id} className="border">
-                <td className="p-2">{p.date}</td>
-                <td className="p-2">{p.module}</td>
-                <td className={`p-2 font-semibold ${p.status === "present" ? "text-green-600" : "text-red-600"}`}>
-                  {p.status === "present" ? "Présent" : "Absent"}
+                <td className="p-2">{formatDate(p.date)}</td>
+                <td className="p-2">{typeof p.module === "string" ? p.module : p.module.title}</td>
+                <td className="p-2">
+                  <StatusBadge status={p.status} />
                 </td>
                 <td className="p-2">{p.motif || "—"}</td>
               </tr>
