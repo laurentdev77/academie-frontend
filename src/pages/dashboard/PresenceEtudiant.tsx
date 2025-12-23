@@ -1,19 +1,32 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-const API = import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "https://academie-backend-2.onrender.com/api";
+const API =
+  import.meta.env.VITE_API_URL?.replace(/\/$/, "") ||
+  "https://academie-backend-2.onrender.com/api";
+
+/* ======================= TYPES ======================= */
+type PresenceStatus = "present" | "absent" | "late" | "justified";
 
 interface Presence {
   id: number;
-  date: string;
-  module: string | { title: string }; // module peut être string ou objet
-  status: "present" | "absent";
+  date?: string | null;
+  createdAt?: string | null;
+  module: string | { title: string };
+  status?: string;
+  isPresent?: boolean;
+  isLate?: boolean;
+  isJustified?: boolean;
   motif?: string;
 }
 
-// Helper pour formater les dates
-const formatDate = (isoDate: string) => {
-  const d = new Date(isoDate);
+/* ======================= HELPERS ======================= */
+// Format date sécurisé
+const formatDate = (value?: string | null) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return "—";
+
   return d.toLocaleDateString("fr-FR", {
     day: "2-digit",
     month: "2-digit",
@@ -23,19 +36,64 @@ const formatDate = (isoDate: string) => {
   });
 };
 
-// Badge visuel pour le statut
-const StatusBadge: React.FC<{ status: "present" | "absent" }> = ({ status }) => {
-  const colors = {
-    present: "bg-green-100 text-green-800",
-    absent: "bg-red-100 text-red-800",
+// Mapping backend → frontend
+const mapStatus = (p: Presence): PresenceStatus => {
+  if (p.status) {
+    switch (p.status.toLowerCase()) {
+      case "present":
+        return "present";
+      case "absent":
+        return "absent";
+      case "retard":
+      case "late":
+        return "late";
+      case "justifie":
+      case "justified":
+        return "justified";
+    }
+  }
+
+  if (p.isJustified) return "justified";
+  if (p.isLate) return "late";
+  if (p.isPresent) return "present";
+
+  return "absent";
+};
+
+/* ======================= STATUS BADGE ======================= */
+const StatusBadge: React.FC<{ status: PresenceStatus }> = ({ status }) => {
+  const config: Record<
+    PresenceStatus,
+    { label: string; className: string }
+  > = {
+    present: {
+      label: "Présent",
+      className: "bg-green-100 text-green-800",
+    },
+    absent: {
+      label: "Absent",
+      className: "bg-red-100 text-red-800",
+    },
+    late: {
+      label: "Retard",
+      className: "bg-yellow-100 text-yellow-800",
+    },
+    justified: {
+      label: "Justifié",
+      className: "bg-blue-100 text-blue-800",
+    },
   };
+
   return (
-    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${colors[status]}`}>
-      {status === "present" ? "Présent" : "Absent"}
+    <span
+      className={`px-2 py-1 rounded-full text-xs font-semibold ${config[status].className}`}
+    >
+      {config[status].label}
     </span>
   );
 };
 
+/* ======================= COMPONENT ======================= */
 const PresenceEtudiant: React.FC = () => {
   const [list, setList] = useState<Presence[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +110,9 @@ const PresenceEtudiant: React.FC = () => {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
-        const data = Array.isArray(res.data) ? res.data : res.data?.data ?? [];
+        const data = Array.isArray(res.data)
+          ? res.data
+          : res.data?.data ?? [];
         setList(data);
       })
       .catch((err) => {
@@ -86,10 +146,16 @@ const PresenceEtudiant: React.FC = () => {
           ) : (
             list.map((p) => (
               <tr key={p.id} className="border">
-                <td className="p-2">{formatDate(p.date)}</td>
-                <td className="p-2">{typeof p.module === "string" ? p.module : p.module.title}</td>
                 <td className="p-2">
-                  <StatusBadge status={p.status} />
+                  {formatDate(p.date ?? p.createdAt)}
+                </td>
+                <td className="p-2">
+                  {typeof p.module === "string"
+                    ? p.module
+                    : p.module?.title ?? "—"}
+                </td>
+                <td className="p-2">
+                  <StatusBadge status={mapStatus(p)} />
                 </td>
                 <td className="p-2">{p.motif || "—"}</td>
               </tr>
