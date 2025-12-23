@@ -1,13 +1,14 @@
+// src/pages/Dashboard.tsx
 import React, { useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import api from "../utils/axiosConfig";
 
 interface Stats {
-  students: number;
-  teachers: number;
-  modules: number;
-  notes: number;
-  bulletins: number;
+  students?: number;
+  teachers?: number;
+  modules?: number;
+  notes?: number;
+  bulletins?: number;
 }
 
 interface User {
@@ -34,9 +35,8 @@ const Dashboard: React.FC = () => {
 
         setUser(profileRes.data.user);
 
-        // ✅ FIX ICI : on prend stats.stats
+        // ✅ CORRECTION ICI
         setStats(statsRes.data.stats);
-
       } catch (err: any) {
         console.error("fetch error:", err);
         setError("Impossible de charger le profil ou les statistiques.");
@@ -57,24 +57,25 @@ const Dashboard: React.FC = () => {
         </h1>
 
         {stats ? (
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="font-semibold text-xl mb-2">Statistiques</h2>
-              <p>Étudiants: {stats.students}</p>
-              <p>Enseignants: {stats.teachers}</p>
-              <p>Modules: {stats.modules}</p>
-              <p>Notes: {stats.notes}</p>
-              <p>Bulletins: {stats.bulletins}</p>
+              <h2 className="font-semibold text-sm text-gray-500">Élèves Officiers</h2>
+              <p className="text-3xl font-bold">{stats.students ?? 0}</p>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="font-semibold text-xl mb-2">Notifications</h2>
-              <p>Dernières alertes et messages...</p>
+              <h2 className="font-semibold text-sm text-gray-500">Enseignants</h2>
+              <p className="text-3xl font-bold">{stats.teachers ?? 0}</p>
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow">
-              <h2 className="font-semibold text-xl mb-2">Tâches</h2>
-              <p>Vos tâches récentes...</p>
+              <h2 className="font-semibold text-sm text-gray-500">Modules</h2>
+              <p className="text-3xl font-bold">{stats.modules ?? 0}</p>
+            </div>
+
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="font-semibold text-sm text-gray-500">Notes</h2>
+              <p className="text-3xl font-bold">{stats.notes ?? 0}</p>
             </div>
           </div>
         ) : (
