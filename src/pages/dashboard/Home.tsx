@@ -1,3 +1,4 @@
+// src/pages/DashboardHome.tsx
 import React, { useEffect, useState } from "react";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,16 +39,23 @@ const DashboardHome: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ---------------- Auto-refresh ----------------
   useEffect(() => {
-    fetchStats();
+    fetchStats(); // initial fetch
+    const interval = setInterval(() => {
+      fetchStats();
+    }, 30000); // rafraîchissement toutes les 30 secondes
+
+    return () => clearInterval(interval); // cleanup on unmount
   }, []);
 
+  // ---------------- Fetch Stats ----------------
   const fetchStats = async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await api.get("/dashboard/stats");
-      setStats(res.data);
+      setStats(res.data.stats);
     } catch (err: any) {
       console.error("Erreur fetchStats:", err);
       setError(err.response?.data?.message || "Erreur de chargement des statistiques");
@@ -84,14 +92,19 @@ const DashboardHome: React.FC = () => {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Tableau de bord</h1>
-        <Button onClick={fetchStats} variant="outline">
-          <RefreshCcw className="w-4 h-4 mr-1" /> Actualiser
+        <Button
+          onClick={fetchStats}
+          variant="outline"
+          disabled={loading}
+        >
+          <RefreshCcw className="w-4 h-4 mr-1 animate-spin-slow" />
+          {loading ? "Actualisation..." : "Actualiser"}
         </Button>
       </div>
 
       {error && <p className="text-red-600">{error}</p>}
 
-      {loading ? (
+      {loading && !stats ? (
         <p>Chargement...</p>
       ) : (
         <>
