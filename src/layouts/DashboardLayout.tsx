@@ -16,14 +16,6 @@ import {
   LucideRefreshCw,
 } from "lucide-react";
 
-/**
- * DashboardLayout — style "RDC officiel"
- *
- * - Lit le profil via /api/auth/profile (token)
- * - Gère l'affichage des liens selon rôle
- * - Responsive: sidebar collapsible + mobile drawer
- */
-
 interface User {
   id?: string;
   username?: string;
@@ -36,25 +28,23 @@ interface NavItem {
   name: string;
   path: string;
   icon: React.ReactNode;
-  roles: string[]; // allowed roles
+  roles: string[];
 }
 
 const DashboardLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Nav items (unique names)
   const navItems: NavItem[] = [
     { name: "Accueil", path: "/dashboard", icon: <LucideHome className="w-5 h-5" />, roles: ["student", "teacher", "secretary", "admin", "DE"] },
     { name: "Calendrier Académique", path: "/dashboard/CalendrierAcademique", icon: <LucideCalendarDays className="w-5 h-5" />, roles: ["secretary", "admin", "DE"] },
     { name: "Mon Calendrier Académique", path: "/dashboard/CalendrierEnseignant", icon: <LucideCalendarDays className="w-5 h-5" />, roles: ["teacher"] },
     { name: "Mon Calendrier Académique", path: "/dashboard/CalendrierEtudiant", icon: <LucideCalendarDays className="w-5 h-5" />, roles: ["student"] },
-    { name: "Elèves Officiers", path: "/dashboard/etudiants", icon: <LucideUser className="w-5 h-5" />, roles: ["secretary", "admin", "DE","secretary"] },
+    { name: "Elèves Officiers", path: "/dashboard/etudiants", icon: <LucideUser className="w-5 h-5" />, roles: ["secretary", "admin", "DE"] },
     { name: "Elèves Officiers", path: "/dashboard/EtudiantsEnseignant", icon: <LucideUser className="w-5 h-5" />, roles: ["teacher"] },
     { name: "Enseignants", path: "/dashboard/Enseignants", icon: <LucideUser className="w-5 h-5" />, roles: ["secretary", "admin", "DE"] },
     { name: "Utilisateurs", path: "/dashboard/utilisateurs", icon: <LucideUsers className="w-5 h-5" />, roles: ["admin", "DE","secretary"] },
@@ -73,46 +63,42 @@ const DashboardLayout: React.FC = () => {
     { name: "Mes Présences", path: "/dashboard/PresencesEtudiant", icon: <LucideCheckSquare className="w-5 h-5" />, roles: ["student"] },
   ];
 
-  // Helper: token header
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
 
-  // Fetch profile from backend (if token present)
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!token) return;
-      setLoadingProfile(true);
-      setAuthError(null);
-      try {
-        const res = await api.get("/auth/profile");
-        const u = res.data?.user ?? null;
-        // normalize
-        const normalized: User | null = u
-          ? {
-              id: u.id,
-              username: u.username ?? u.name ?? "Utilisateur",
-              role: u.role && typeof u.role === "object"? { name: u.role.name }: undefined,
-              avatarUrl: u.photoUrl ?? u.avatarUrl ?? null,
-              email: u.email ?? null,
-            }
-          : null;
+  const fetchProfile = async () => {
+    if (!token) return;
+    setLoadingProfile(true);
+    setAuthError(null);
+    try {
+      const res = await api.get("/auth/profile");
+      const u = res.data?.user ?? null;
+      if (u) {
+        const normalized: User = {
+          id: u.id,
+          username: u.username ?? u.name ?? "Utilisateur",
+          role: u.role && typeof u.role === "object" ? { name: u.role.name } : undefined,
+          avatarUrl: u.photoUrl ?? u.avatarUrl ?? null,
+          email: u.email ?? null,
+        };
         setUser(normalized);
-        // store for other pages (safe)
         try {
-          if (normalized) localStorage.setItem("user", JSON.stringify(normalized));
-        } catch { /* ignore storage errors */ }
-      } catch (err: any) {
-        console.error("fetchProfile error:", err);
-        setAuthError(err.response?.data?.message ?? "Impossible de charger le profil.");
-        // remove invalid token/user to avoid loops
-        try {
-          localStorage.removeItem("token");
-          localStorage.removeItem("user");
+          localStorage.setItem("user", JSON.stringify(normalized));
         } catch {}
-        setUser(null);
-      } finally {
-        setLoadingProfile(false);
       }
-    };
+    } catch (err: any) {
+      console.error("fetchProfile error:", err);
+      setAuthError(err.response?.data?.message ?? "Impossible de charger le profil.");
+      try {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      } catch {}
+      setUser(null);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  useEffect(() => {
     fetchProfile();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -125,6 +111,10 @@ const DashboardLayout: React.FC = () => {
     navigate("/login", { replace: true });
   };
 
+  const refreshProfile = () => {
+    fetchProfile();
+  };
+
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + "/");
 
@@ -135,20 +125,14 @@ const DashboardLayout: React.FC = () => {
     return initials.toUpperCase();
   };
 
-  // Render
   return (
     <div className="flex h-screen" style={{ background: "#F1F3F5" }}>
-      {/* Sidebar */}
-      <aside
-        className={`transition-all duration-300 shadow-sm ${collapsed ? "w-20" : "w-64"} bg-white border-r flex flex-col`}
-      >
+      <aside className={`transition-all duration-300 shadow-sm ${collapsed ? "w-20" : "w-64"} bg-white border-r flex flex-col`}>
         <div className="p-4 border-b flex items-center justify-between" style={{ background: "#00A3E0", color: "white" }}>
           <div className="flex items-center gap-3">
             {!collapsed ? (
               <div className="flex items-center gap-3">
-                <div className="rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm" style={{ background: "#FFD100", color: "#0f172a" }}>
-                  AM
-                </div>
+                <div className="rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm" style={{ background: "#FFD100", color: "#0f172a" }}>AM</div>
                 <div>
                   <div className="text-sm font-semibold">Académie Militaire</div>
                   <div className="text-xs opacity-90">FARDC</div>
@@ -201,17 +185,13 @@ const DashboardLayout: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main */}
       <div className="flex-1 flex flex-col">
         <header className="flex items-center justify-between px-6 py-3 shadow-sm" style={{ background: "#ffffff" }}>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-4">
-              <h1 className="text-lg font-semibold">
-                {navItems.find((item) => item.path === location.pathname)?.name || "Dashboard"}
-              </h1>
-
+              <h1 className="text-lg font-semibold">{navItems.find((item) => item.path === location.pathname)?.name || "Dashboard"}</h1>
               <div className="hidden md:flex items-center gap-2 ml-4">
-                <Button size="sm" variant="outline" className="flex items-center gap-2" onClick={() => window.location.reload()}>
+                <Button size="sm" variant="outline" className="flex items-center gap-2" onClick={refreshProfile}>
                   <LucideRefreshCw className="w-4 h-4" /> Rafraîchir
                 </Button>
               </div>
