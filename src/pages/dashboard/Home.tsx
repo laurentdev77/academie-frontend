@@ -84,11 +84,10 @@ const DashboardHome: React.FC = () => {
   if (role === "student") {
     chartData.push(
       { name: "Mes Notes", value: stats.notes || 0 },
-      { name: "Mes Bulletins", value: stats.bulletins || 0 }
     );
   }
 
-  if (role === "teacher" || role === "enseignant") {
+  if (role === "teacher") {
     chartData.push({
       name: "Mes Modules",
       value: stats.modules || 0,
@@ -158,18 +157,8 @@ const DashboardHome: React.FC = () => {
               percent={percent(stats.notes || 0)}
             />
 
-            {/* 🎓 ÉTUDIANT */}
-            {role === "student" && (
-              <StatCard
-                title="Mes Bulletins"
-                value={stats.bulletins || 0}
-                icon={<Award />}
-                percent={percent(stats.bulletins || 0)}
-              />
-            )}
-
             {/* 👨‍🏫 ENSEIGNANT */}
-            {(role === "teacher" || role === "enseignant") && (
+            {(role === "teacher") && (
               <StatCard
                 title="Mes Modules"
                 value={stats.modules || 0}
