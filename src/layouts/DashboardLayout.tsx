@@ -1,6 +1,6 @@
 // src/layouts/DashboardLayout.tsx
 import React, { useEffect, useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import api from "@/utils/axiosConfig";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +33,7 @@ interface NavItem {
 
 const DashboardLayout: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
 
   /** ✅ Affichage immédiat depuis le cache (connexion rapide) */
@@ -77,7 +78,7 @@ const DashboardLayout: React.FC = () => {
   /** ✅ Fetch profil en arrière-plan */
   const fetchProfile = async () => {
     if (!token) {
-      window.location.href = "/login";
+      navigate("/login", { replace: true });
       return;
     }
 
@@ -92,7 +93,7 @@ const DashboardLayout: React.FC = () => {
         id: u.id,
         username: u.username ?? u.name ?? "Utilisateur",
         role: u.role ? { name: u.role.name } : undefined,
-        avatarUrl: u.photoUrl ?? u.avatarUrl ?? null,
+        avatarUrl: u.photoUrl ? `${import.meta.env.VITE_API_URL}${u.photoUrl}`: u.avatarUrl ?? null,
         email: u.email ?? null,
       };
 
@@ -101,7 +102,7 @@ const DashboardLayout: React.FC = () => {
     } catch (err: any) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      window.location.href = "/login";
+      navigate("/login", { replace: true });
     } finally {
       setLoadingProfile(false);
     }
@@ -116,7 +117,7 @@ const DashboardLayout: React.FC = () => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    window.location.href = "/login";
+    navigate("/login", { replace: true });
   };
 
   const isActive = (path: string) =>
