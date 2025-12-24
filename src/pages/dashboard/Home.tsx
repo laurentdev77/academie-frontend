@@ -1,4 +1,3 @@
-// src/pages/DashboardHome.tsx
 import React, { useEffect, useState } from "react";
 import api from "@/services/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,55 +21,68 @@ import {
   GraduationCap,
 } from "lucide-react";
 
+/* ================================
+   TYPES
+================================ */
 interface StatsData {
+  users?: number;
   students?: number;
   teachers?: number;
   modules?: number;
   notes?: number;
   bulletins?: number;
-  notesForStudent?: number;
-  bulletinsForStudent?: number;
 }
 
-const DashboardHome: React.FC = () => {
-  const role = localStorage.getItem("role") || "admin";
+type Role = "admin" | "teacher" | "enseignant" | "student";
 
+/* ================================
+   COMPONENT
+================================ */
+const DashboardHome: React.FC = () => {
+  const [role, setRole] = useState<Role>("admin");
   const [stats, setStats] = useState<StatsData>({});
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ---------------- Auto-refresh ----------------
-  useEffect(() => {
-    fetchStats(); // initial fetch
-    const interval = setInterval(() => {
-      fetchStats();
-    }, 30000); // rafraîchissement toutes les 30 secondes
-
-    return () => clearInterval(interval); // cleanup on unmount
-  }, []);
-
-  // ---------------- Fetch Stats ----------------
+  /* ================================
+     FETCH STATS
+  ================================ */
   const fetchStats = async () => {
     setLoading(true);
     setError(null);
+
     try {
       const res = await api.get("/dashboard/stats");
-      setStats(res.data.stats);
+
+      // 🔥 FIX CRITIQUE : structure backend respectée
+      setRole(res.data.role);
+      setStats(res.data.stats || {});
     } catch (err: any) {
       console.error("Erreur fetchStats:", err);
-      setError(err.response?.data?.message || "Erreur de chargement des statistiques");
+      setError(
+        err.response?.data?.message ||
+          "Erreur de chargement des statistiques"
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  // Données du graphique
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
+  /* ================================
+     GRAPH DATA
+  ================================ */
   const chartData =
     role === "student"
       ? [
-          { name: "Notes", value: stats.notesForStudent || 0 },
-          { name: "Bulletins", value: stats.bulletinsForStudent || 0 },
+          { name: "Notes", value: stats.notes || 0 },
+          { name: "Bulletins", value: stats.bulletins || 0 },
         ]
+      : role === "teacher" || role === "enseignant"
+      ? [{ name: "Modules", value: stats.modules || 0 }]
       : [
           { name: "Elèves Officiers", value: stats.students || 0 },
           { name: "Enseignants", value: stats.teachers || 0 },
@@ -78,113 +90,96 @@ const DashboardHome: React.FC = () => {
           { name: "Notes", value: stats.notes || 0 },
         ];
 
-  const total =
-    role === "student"
-      ? (stats.notesForStudent || 0) + (stats.bulletinsForStudent || 0)
-      : (stats.students || 0) +
-        (stats.teachers || 0) +
-        (stats.modules || 0) +
-        (stats.notes || 0);
+  const total = chartData.reduce((sum, i) => sum + i.value, 0);
+  const percent = (value: number) =>
+    total > 0 ? Math.round((value / total) * 100) : 0;
 
-  const percent = (value: number) => (total ? (value / total) * 100 : 0);
-
+  /* ================================
+     RENDER
+  ================================ */
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Tableau de bord</h1>
-        <Button
-          onClick={fetchStats}
-          variant="outline"
-          disabled={loading}
-        >
-          <RefreshCcw className="w-4 h-4 mr-1 animate-spin-slow" />
-          {loading ? "Actualisation..." : "Actualiser"}
+        <Button onClick={fetchStats} variant="outline">
+          <RefreshCcw className="w-4 h-4 mr-1" />
+          Actualiser
         </Button>
       </div>
 
       {error && <p className="text-red-600">{error}</p>}
 
-      {loading && !stats ? (
+      {loading ? (
         <p>Chargement...</p>
       ) : (
         <>
-          {/* Cartes statistiques */}
+          {/* ================================
+              CARDS
+          ================================ */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {role !== "student" ? (
+            {/* ADMIN */}
+            {role === "admin" && (
               <>
-                <Card>
-                  <CardHeader className="flex justify-between items-center">
-                    <CardTitle>Elèves Officiers</CardTitle>
-                    <User className="text-blue-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{stats.students || 0}</p>
-                    <Progress value={percent(stats.students || 0)} className="mt-2" />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex justify-between items-center">
-                    <CardTitle>Enseignants</CardTitle>
-                    <GraduationCap className="text-indigo-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{stats.teachers || 0}</p>
-                    <Progress value={percent(stats.teachers || 0)} className="mt-2" />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex justify-between items-center">
-                    <CardTitle>Modules</CardTitle>
-                    <BookOpen className="text-purple-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{stats.modules || 0}</p>
-                    <Progress value={percent(stats.modules || 0)} className="mt-2" />
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="flex justify-between items-center">
-                    <CardTitle>Notes</CardTitle>
-                    <FileText className="text-green-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{stats.notes || 0}</p>
-                    <Progress value={percent(stats.notes || 0)} className="mt-2" />
-                  </CardContent>
-                </Card>
+                <StatCard
+                  title="Elèves Officiers"
+                  value={stats.students || 0}
+                  icon={<User />}
+                  percent={percent(stats.students || 0)}
+                />
+                <StatCard
+                  title="Enseignants"
+                  value={stats.teachers || 0}
+                  icon={<GraduationCap />}
+                  percent={percent(stats.teachers || 0)}
+                />
+                <StatCard
+                  title="Modules"
+                  value={stats.modules || 0}
+                  icon={<BookOpen />}
+                  percent={percent(stats.modules || 0)}
+                />
+                <StatCard
+                  title="Notes"
+                  value={stats.notes || 0}
+                  icon={<FileText />}
+                  percent={percent(stats.notes || 0)}
+                />
               </>
-            ) : (
-              <>
-                <Card>
-                  <CardHeader className="flex justify-between items-center">
-                    <CardTitle>Mes Notes</CardTitle>
-                    <FileText className="text-green-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{stats.notesForStudent || 0}</p>
-                    <Progress value={percent(stats.notesForStudent || 0)} className="mt-2" />
-                  </CardContent>
-                </Card>
+            )}
 
-                <Card>
-                  <CardHeader className="flex justify-between items-center">
-                    <CardTitle>Mes Bulletins</CardTitle>
-                    <Award className="text-yellow-500" />
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-3xl font-bold">{stats.bulletinsForStudent || 0}</p>
-                    <Progress value={percent(stats.bulletinsForStudent || 0)} className="mt-2" />
-                  </CardContent>
-                </Card>
+            {/* TEACHER */}
+            {(role === "teacher" || role === "enseignant") && (
+              <StatCard
+                title="Mes Modules"
+                value={stats.modules || 0}
+                icon={<BookOpen />}
+                percent={100}
+              />
+            )}
+
+            {/* STUDENT */}
+            {role === "student" && (
+              <>
+                <StatCard
+                  title="Mes Notes"
+                  value={stats.notes || 0}
+                  icon={<FileText />}
+                  percent={percent(stats.notes || 0)}
+                />
+                <StatCard
+                  title="Mes Bulletins"
+                  value={stats.bulletins || 0}
+                  icon={<Award />}
+                  percent={percent(stats.bulletins || 0)}
+                />
               </>
             )}
           </div>
 
-          {/* Graphique */}
-          <Card className="mt-6">
+          {/* ================================
+              CHART
+          ================================ */}
+          <Card>
             <CardHeader>
               <CardTitle>Vue d’ensemble</CardTitle>
             </CardHeader>
@@ -193,7 +188,7 @@ const DashboardHome: React.FC = () => {
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
-                  <YAxis />
+                  <YAxis allowDecimals={false} />
                   <Tooltip />
                   <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -205,5 +200,31 @@ const DashboardHome: React.FC = () => {
     </div>
   );
 };
+
+/* ================================
+   REUSABLE CARD
+================================ */
+const StatCard = ({
+  title,
+  value,
+  icon,
+  percent,
+}: {
+  title: string;
+  value: number;
+  icon: React.ReactNode;
+  percent: number;
+}) => (
+  <Card>
+    <CardHeader className="flex flex-row justify-between items-center">
+      <CardTitle>{title}</CardTitle>
+      {icon}
+    </CardHeader>
+    <CardContent>
+      <p className="text-3xl font-bold">{value}</p>
+      <Progress value={percent} className="mt-2" />
+    </CardContent>
+  </Card>
+);
 
 export default DashboardHome;
