@@ -154,7 +154,33 @@ const DashboardLayout: React.FC = () => {
       {/* Main */}
       <div className="flex-1 flex flex-col">
         <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm">
-          <h1 className="font-semibold">Dashboard</h1>
+          <div className="flex items-center gap-4">
+            <h1 className="font-semibold">Dashboard</h1>
+
+            {user && (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+                  {user.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-sm font-semibold text-white bg-[#00A3E0] w-full h-full flex items-center justify-center">
+                      {avatarInitials(user)}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-col leading-tight">
+                  <span className="text-sm font-semibold">{user.username}</span>
+                  <span className="text-xs text-gray-600 capitalize">{user.role?.name}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
           <Button size="sm" variant="outline" onClick={fetchProfile}>
             <LucideRefreshCw className="w-4 h-4 mr-2" /> Rafraîchir
           </Button>
