@@ -15,11 +15,12 @@ const Register: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const API_BASE = import.meta.env.VITE_API_URL?.replace("/api", "");
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // ✅ Upload photo
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -45,14 +46,14 @@ const Register: React.FC = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+    e.preventDefault(); // ✅ Empêche reload
     setLoading(true);
 
     try {
       const res = await api.post("/auth/register", formData);
       if (res.data?.message) {
         message.success("Inscription réussie !");
-        navigate("/login");
+        navigate("/login", { replace: true }); // ✅ redirection sécurisée
       }
     } catch (error: any) {
       message.error(error.response?.data?.message || "Erreur d’inscription");
@@ -60,8 +61,6 @@ const Register: React.FC = () => {
       setLoading(false);
     }
   };
-
-  const API_BASE = import.meta.env.VITE_API_URL?.replace("/api", "");
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
@@ -71,21 +70,50 @@ const Register: React.FC = () => {
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input name="username" placeholder="Nom d’utilisateur" required onChange={handleChange} className="w-full border px-3 py-2 rounded-lg" />
-          <input name="email" type="email" placeholder="Email" required onChange={handleChange} className="w-full border px-3 py-2 rounded-lg" />
-          <input name="password" type="password" placeholder="Mot de passe" required onChange={handleChange} className="w-full border px-3 py-2 rounded-lg" />
-          <input name="telephone" placeholder="Téléphone" onChange={handleChange} className="w-full border px-3 py-2 rounded-lg" />
+          <input
+            name="username"
+            placeholder="Nom d’utilisateur"
+            required
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded-lg"
+          />
+          <input
+            name="email"
+            type="email"
+            placeholder="Email"
+            required
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded-lg"
+          />
+          <input
+            type="password"
+            name="password"
+            placeholder="Mot de passe"
+            required
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded-lg"
+          />
+          <input
+            name="telephone"
+            placeholder="Téléphone"
+            onChange={handleChange}
+            className="w-full border px-3 py-2 rounded-lg"
+          />
 
           <input type="file" accept="image/*" onChange={handlePhotoUpload} />
 
           {formData.photoUrl && (
             <img
               src={`${API_BASE}${formData.photoUrl}`}
+              alt="Avatar"
               className="w-24 h-24 rounded-full mt-3 object-cover"
             />
           )}
 
-          <button disabled={loading} className="w-full bg-blue-600 text-white py-2 rounded-lg">
+          <button
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-2 rounded-lg flex justify-center items-center gap-2"
+          >
             {loading ? <Spin /> : "S’inscrire"}
           </button>
         </form>
