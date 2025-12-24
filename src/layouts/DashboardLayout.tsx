@@ -1,4 +1,3 @@
-// src/layouts/DashboardLayout.tsx
 import React, { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import api from "@/utils/axiosConfig";
@@ -35,7 +34,14 @@ const DashboardLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem("user");
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -47,13 +53,13 @@ const DashboardLayout: React.FC = () => {
     { name: "Elèves Officiers", path: "/dashboard/etudiants", icon: <LucideUser className="w-5 h-5" />, roles: ["secretary", "admin", "DE"] },
     { name: "Elèves Officiers", path: "/dashboard/EtudiantsEnseignant", icon: <LucideUser className="w-5 h-5" />, roles: ["teacher"] },
     { name: "Enseignants", path: "/dashboard/Enseignants", icon: <LucideUser className="w-5 h-5" />, roles: ["secretary", "admin", "DE"] },
-    { name: "Utilisateurs", path: "/dashboard/utilisateurs", icon: <LucideUsers className="w-5 h-5" />, roles: ["admin", "DE","secretary"] },
+    { name: "Utilisateurs", path: "/dashboard/utilisateurs", icon: <LucideUsers className="w-5 h-5" />, roles: ["admin", "DE", "secretary"] },
     { name: "Filières", path: "/dashboard/filieres", icon: <LucideBook className="w-5 h-5" />, roles: ["admin", "DE"] },
     { name: "Promotions", path: "/dashboard/promotions", icon: <LucideBook className="w-5 h-5" />, roles: ["admin", "DE"] },
-    { name: "Modules (Cours)", path: "/dashboard/modules", icon: <LucideBook className="w-5 h-5" />, roles: ["admin","secretary", "DE"] },
+    { name: "Modules (Cours)", path: "/dashboard/modules", icon: <LucideBook className="w-5 h-5" />, roles: ["admin", "secretary", "DE"] },
     { name: "Modules (Cours)", path: "/dashboard/ModulesEtudiant", icon: <LucideBook className="w-5 h-5" />, roles: ["student"] },
     { name: "Mes Modules (Cours)", path: "/dashboard/ModulesEnseignant", icon: <LucideBook className="w-5 h-5" />, roles: ["teacher"] },
-    { name: "Notes des EO", path: "/dashboard/notes", icon: <LucideClipboard className="w-5 h-5" />, roles: ["admin","secretary", "DE"] },
+    { name: "Notes des EO", path: "/dashboard/notes", icon: <LucideClipboard className="w-5 h-5" />, roles: ["admin", "secretary", "DE"] },
     { name: "Notes des EO", path: "/dashboard/NotesEnseignant", icon: <LucideClipboard className="w-5 h-5" />, roles: ["teacher"] },
     { name: "Mes Notes", path: "/dashboard/NotesEtudiant", icon: <LucideClipboard className="w-5 h-5" />, roles: ["student"] },
     { name: "Bulletins", path: "/dashboard/bulletins", icon: <LucideClipboard className="w-5 h-5" />, roles: ["admin", "secretary", "DE"] },
@@ -63,36 +69,31 @@ const DashboardLayout: React.FC = () => {
     { name: "Mes Présences", path: "/dashboard/PresencesEtudiant", icon: <LucideCheckSquare className="w-5 h-5" />, roles: ["student"] },
   ];
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = localStorage.getItem("token");
 
   const fetchProfile = async () => {
     if (!token) return;
     setLoadingProfile(true);
     setAuthError(null);
+
     try {
       const res = await api.get("/auth/profile");
-      const u = res.data?.user ?? null;
+      const u = res.data?.user;
       if (u) {
         const normalized: User = {
           id: u.id,
           username: u.username ?? u.name ?? "Utilisateur",
-          role: u.role && typeof u.role === "object" ? { name: u.role.name } : undefined,
+          role: u.role ? { name: u.role.name } : undefined,
           avatarUrl: u.photoUrl ?? u.avatarUrl ?? null,
           email: u.email ?? null,
         };
         setUser(normalized);
-        try {
-          localStorage.setItem("user", JSON.stringify(normalized));
-        } catch {}
+        localStorage.setItem("user", JSON.stringify(normalized));
       }
-    } catch (err: any) {
-      console.error("fetchProfile error:", err);
-      setAuthError(err.response?.data?.message ?? "Impossible de charger le profil.");
-      try {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-      } catch {}
-      setUser(null);
+    } catch {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      navigate("/login", { replace: true });
     } finally {
       setLoadingProfile(false);
     }
@@ -100,127 +101,66 @@ const DashboardLayout: React.FC = () => {
 
   useEffect(() => {
     fetchProfile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-    } catch {}
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
     navigate("/login", { replace: true });
-  };
-
-  const refreshProfile = () => {
-    fetchProfile();
   };
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + "/");
 
-  const avatarInitials = (u?: User | null) => {
-    if (!u) return "AM";
-    const parts = (u.username || "User").split(" ");
-    const initials = parts.length === 1 ? parts[0][0] : parts[0][0] + (parts[1] ? parts[1][0] : "");
-    return initials.toUpperCase();
-  };
+  const avatarInitials = (u?: User | null) =>
+    u?.username ? u.username.charAt(0).toUpperCase() : "AM";
 
   return (
-    <div className="flex h-screen" style={{ background: "#F1F3F5" }}>
-      <aside className={`transition-all duration-300 shadow-sm ${collapsed ? "w-20" : "w-64"} bg-white border-r flex flex-col`}>
-        <div className="p-4 border-b flex items-center justify-between" style={{ background: "#00A3E0", color: "white" }}>
-          <div className="flex items-center gap-3">
-            {!collapsed ? (
-              <div className="flex items-center gap-3">
-                <div className="rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm" style={{ background: "#FFD100", color: "#0f172a" }}>AM</div>
-                <div>
-                  <div className="text-sm font-semibold">Académie Militaire</div>
-                  <div className="text-xs opacity-90">FARDC</div>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm" style={{ background: "#FFD100", color: "#0f172a" }}>AM</div>
-            )}
-          </div>
-
-          <Button size="sm" variant="ghost" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle sidebar" className="text-white">
-            <LucideMenu className="w-4 h-4" />
+    <div className="flex h-screen bg-[#F1F3F5]">
+      {/* Sidebar */}
+      <aside className={`transition-all duration-300 ${collapsed ? "w-20" : "w-64"} bg-white border-r flex flex-col`}>
+        <div className="p-4 flex justify-between items-center bg-[#00A3E0] text-white">
+          <div className="font-bold">AM</div>
+          <Button size="sm" variant="ghost" onClick={() => setCollapsed(!collapsed)}>
+            <LucideMenu />
           </Button>
         </div>
 
         <nav className="p-3 flex-1 overflow-auto">
-          {user ? (
+          {user &&
             navItems
-              .filter((item) => item.roles.includes(user.role?.name ?? ""))
-              .map((item) => (
-                <Link key={item.path} to={item.path} className={`flex items-center gap-3 px-3 py-2 rounded-md my-1 transition-colors ${isActive(item.path) ? "bg-[#00A3E0] text-white" : "text-[#0f172a] hover:bg-gray-100"}`}>
-                  <span className="flex-none">{item.icon}</span>
-                  {!collapsed && <span className="text-sm">{item.name}</span>}
+              .filter((n) => n.roles.includes(user.role?.name ?? ""))
+              .map((n) => (
+                <Link
+                  key={n.path}
+                  to={n.path}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-md ${
+                    isActive(n.path) ? "bg-[#00A3E0] text-white" : "hover:bg-gray-100"
+                  }`}
+                >
+                  {n.icon}
+                  {!collapsed && n.name}
                 </Link>
-              ))
-          ) : (
-            <div className="text-sm text-gray-500 px-3 py-2">Connectez-vous pour voir la navigation.</div>
-          )}
+              ))}
         </nav>
 
         <div className="p-3 border-t">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-white" style={{ background: "#D71920" }} title={user?.username}>
-              {user?.avatarUrl ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full rounded-full object-cover" /> : avatarInitials(user)}
-            </div>
-
-            {!collapsed && (
-              <div className="flex-1">
-                <div className="text-sm font-medium">{user?.username ?? "Invité"}</div>
-                <div className="text-xs text-gray-600">{user?.role?.name ?? "—"}</div>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <Button size="sm" variant="ghost" onClick={handleLogout} title="Se déconnecter">
-                <LucideLogOut className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
+          <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-2">
+            <LucideLogOut /> {!collapsed && "Déconnexion"}
+          </Button>
         </div>
       </aside>
 
+      {/* Main */}
       <div className="flex-1 flex flex-col">
-        <header className="flex items-center justify-between px-6 py-3 shadow-sm" style={{ background: "#ffffff" }}>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-4">
-              <h1 className="text-lg font-semibold">{navItems.find((item) => item.path === location.pathname)?.name || "Dashboard"}</h1>
-              <div className="hidden md:flex items-center gap-2 ml-4">
-                <Button size="sm" variant="outline" className="flex items-center gap-2" onClick={refreshProfile}>
-                  <LucideRefreshCw className="w-4 h-4" /> Rafraîchir
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {loadingProfile ? (
-              <div className="text-sm text-gray-500">Chargement profil…</div>
-            ) : authError ? (
-              <div className="text-sm text-red-600">Profil: {authError}</div>
-            ) : (
-              <>
-                <div className="hidden sm:flex items-center gap-3">
-                  <span className="text-sm">{user?.username ?? "Invité"}</span>
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold" style={{ background: "#00A3E0", color: "white" }}>
-                    {avatarInitials(user)}
-                  </div>
-                </div>
-
-                <Button variant="destructive" size="sm" onClick={handleLogout} className="flex items-center gap-2">
-                  <LucideLogOut className="w-4 h-4" /> Déconnexion
-                </Button>
-              </>
-            )}
-          </div>
+        <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm">
+          <h1 className="font-semibold">Dashboard</h1>
+          <Button size="sm" variant="outline" onClick={fetchProfile}>
+            <LucideRefreshCw className="w-4 h-4 mr-2" /> Rafraîchir
+          </Button>
         </header>
 
-        <main className="flex-1 p-6 overflow-auto bg-[#F1F3F5]">
+        <main className="flex-1 p-6 overflow-auto">
           <Outlet />
         </main>
       </div>
