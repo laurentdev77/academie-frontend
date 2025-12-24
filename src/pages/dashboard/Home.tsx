@@ -54,7 +54,6 @@ const DashboardHome: React.FC = () => {
     try {
       const res = await api.get("/dashboard/stats");
 
-      // 🔥 FIX CRITIQUE : structure backend respectée
       setRole(res.data.role);
       setStats(res.data.stats || {});
     } catch (err: any) {
@@ -73,22 +72,35 @@ const DashboardHome: React.FC = () => {
   }, []);
 
   /* ================================
-     GRAPH DATA
+     GRAPH DATA (GLOBAL + SPÉCIFIQUE)
   ================================ */
-  const chartData =
-    role === "student"
-      ? [
-          { name: "Notes", value: stats.notes || 0 },
-          { name: "Bulletins", value: stats.bulletins || 0 },
-        ]
-      : role === "teacher" || role === "enseignant"
-      ? [{ name: "Modules", value: stats.modules || 0 }]
-      : [
-          { name: "Elèves Officiers", value: stats.students || 0 },
-          { name: "Enseignants", value: stats.teachers || 0 },
-          { name: "Modules", value: stats.modules || 0 },
-          { name: "Notes", value: stats.notes || 0 },
-        ];
+  const chartData = [
+    { name: "Élèves", value: stats.students || 0 },
+    { name: "Enseignants", value: stats.teachers || 0 },
+    { name: "Modules", value: stats.modules || 0 },
+    { name: "Notes", value: stats.notes || 0 },
+  ];
+
+  if (role === "student") {
+    chartData.push(
+      { name: "Mes Notes", value: stats.notes || 0 },
+      { name: "Mes Bulletins", value: stats.bulletins || 0 }
+    );
+  }
+
+  if (role === "teacher" || role === "enseignant") {
+    chartData.push({
+      name: "Mes Modules",
+      value: stats.modules || 0,
+    });
+  }
+
+  if (role === "admin") {
+    chartData.push({
+      name: "Utilisateurs",
+      value: stats.users || 0,
+    });
+  }
 
   const total = chartData.reduce((sum, i) => sum + i.value, 0);
   const percent = (value: number) =>
@@ -117,37 +129,46 @@ const DashboardHome: React.FC = () => {
               CARDS
           ================================ */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* ADMIN */}
-            {role === "admin" && (
-              <>
-                <StatCard
-                  title="Elèves Officiers"
-                  value={stats.students || 0}
-                  icon={<User />}
-                  percent={percent(stats.students || 0)}
-                />
-                <StatCard
-                  title="Enseignants"
-                  value={stats.teachers || 0}
-                  icon={<GraduationCap />}
-                  percent={percent(stats.teachers || 0)}
-                />
-                <StatCard
-                  title="Modules"
-                  value={stats.modules || 0}
-                  icon={<BookOpen />}
-                  percent={percent(stats.modules || 0)}
-                />
-                <StatCard
-                  title="Notes"
-                  value={stats.notes || 0}
-                  icon={<FileText />}
-                  percent={percent(stats.notes || 0)}
-                />
-              </>
+            {/* 🌍 STATS GLOBALES (TOUS LES RÔLES) */}
+            <StatCard
+              title="Élèves Officiers"
+              value={stats.students || 0}
+              icon={<User />}
+              percent={percent(stats.students || 0)}
+            />
+
+            <StatCard
+              title="Enseignants"
+              value={stats.teachers || 0}
+              icon={<GraduationCap />}
+              percent={percent(stats.teachers || 0)}
+            />
+
+            <StatCard
+              title="Modules"
+              value={stats.modules || 0}
+              icon={<BookOpen />}
+              percent={percent(stats.modules || 0)}
+            />
+
+            <StatCard
+              title="Notes"
+              value={stats.notes || 0}
+              icon={<FileText />}
+              percent={percent(stats.notes || 0)}
+            />
+
+            {/* 🎓 ÉTUDIANT */}
+            {role === "student" && (
+              <StatCard
+                title="Mes Bulletins"
+                value={stats.bulletins || 0}
+                icon={<Award />}
+                percent={percent(stats.bulletins || 0)}
+              />
             )}
 
-            {/* TEACHER */}
+            {/* 👨‍🏫 ENSEIGNANT */}
             {(role === "teacher" || role === "enseignant") && (
               <StatCard
                 title="Mes Modules"
@@ -157,22 +178,14 @@ const DashboardHome: React.FC = () => {
               />
             )}
 
-            {/* STUDENT */}
-            {role === "student" && (
-              <>
-                <StatCard
-                  title="Mes Notes"
-                  value={stats.notes || 0}
-                  icon={<FileText />}
-                  percent={percent(stats.notes || 0)}
-                />
-                <StatCard
-                  title="Mes Bulletins"
-                  value={stats.bulletins || 0}
-                  icon={<Award />}
-                  percent={percent(stats.bulletins || 0)}
-                />
-              </>
+            {/* 🎩 ADMIN */}
+            {role === "admin" && (
+              <StatCard
+                title="Utilisateurs"
+                value={stats.users || 0}
+                icon={<User />}
+                percent={percent(stats.users || 0)}
+              />
             )}
           </div>
 
