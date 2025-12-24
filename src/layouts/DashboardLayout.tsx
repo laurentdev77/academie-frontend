@@ -1,6 +1,6 @@
 // src/layouts/DashboardLayout.tsx
 import React, { useEffect, useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import api from "@/utils/axiosConfig";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +41,7 @@ interface NavItem {
 
 const DashboardLayout: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -121,7 +122,7 @@ const DashboardLayout: React.FC = () => {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
     } catch {}
-    window.location.href = "/login";
+    navigate("/login", { replace: true });
   };
 
   const isActive = (path: string) =>
