@@ -1,5 +1,6 @@
+// src/layouts/DashboardLayout.tsx
 import React, { useEffect, useState } from "react";
-import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import api from "@/utils/axiosConfig";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,8 +33,9 @@ interface NavItem {
 
 const DashboardLayout: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+
+  /** ✅ Affichage immédiat depuis le cache (connexion rapide) */
   const [user, setUser] = useState<User | null>(() => {
     try {
       const cached = localStorage.getItem("user");
@@ -42,6 +44,7 @@ const DashboardLayout: React.FC = () => {
       return null;
     }
   });
+
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
@@ -71,29 +74,34 @@ const DashboardLayout: React.FC = () => {
 
   const token = localStorage.getItem("token");
 
+  /** ✅ Fetch profil en arrière-plan */
   const fetchProfile = async () => {
-    if (!token) return;
+    if (!token) {
+      window.location.href = "/login";
+      return;
+    }
+
     setLoadingProfile(true);
     setAuthError(null);
 
     try {
       const res = await api.get("/auth/profile");
       const u = res.data?.user;
-      if (u) {
-        const normalized: User = {
-          id: u.id,
-          username: u.username ?? u.name ?? "Utilisateur",
-          role: u.role ? { name: u.role.name } : undefined,
-          avatarUrl: u.photoUrl ?? u.avatarUrl ?? null,
-          email: u.email ?? null,
-        };
-        setUser(normalized);
-        localStorage.setItem("user", JSON.stringify(normalized));
-      }
-    } catch {
+
+      const normalized: User = {
+        id: u.id,
+        username: u.username ?? u.name ?? "Utilisateur",
+        role: u.role ? { name: u.role.name } : undefined,
+        avatarUrl: u.photoUrl ?? u.avatarUrl ?? null,
+        email: u.email ?? null,
+      };
+
+      setUser(normalized);
+      localStorage.setItem("user", JSON.stringify(normalized));
+    } catch (err: any) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      navigate("/login", { replace: true });
+      window.location.href = "/login";
     } finally {
       setLoadingProfile(false);
     }
@@ -101,12 +109,14 @@ const DashboardLayout: React.FC = () => {
 
   useEffect(() => {
     fetchProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** ✅ Logout sans page blanche */
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    navigate("/login", { replace: true });
+    window.location.href = "/login";
   };
 
   const isActive = (path: string) =>
@@ -116,77 +126,70 @@ const DashboardLayout: React.FC = () => {
     u?.username ? u.username.charAt(0).toUpperCase() : "AM";
 
   return (
-    <div className="flex h-screen bg-[#F1F3F5]">
+    <div className="flex h-screen" style={{ background: "#F1F3F5" }}>
       {/* Sidebar */}
-      <aside className={`transition-all duration-300 ${collapsed ? "w-20" : "w-64"} bg-white border-r flex flex-col`}>
-        <div className="p-4 flex justify-between items-center bg-[#00A3E0] text-white">
-          <div className="font-bold">AM</div>
-          <Button size="sm" variant="ghost" onClick={() => setCollapsed(!collapsed)}>
-            <LucideMenu />
+      <aside className={`transition-all duration-300 shadow-sm ${collapsed ? "w-20" : "w-64"} bg-white border-r flex flex-col`}>
+        <div className="p-4 border-b flex items-center justify-between" style={{ background: "#00A3E0", color: "white" }}>
+          <div className="flex items-center gap-3">
+            <div className="rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm" style={{ background: "#FFD100", color: "#0f172a" }}>
+              AM
+            </div>
+            {!collapsed && (
+              <div>
+                <div className="text-sm font-semibold">Académie Militaire</div>
+                <div className="text-xs opacity-90">FARDC</div>
+              </div>
+            )}
+          </div>
+
+          <Button size="sm" variant="ghost" onClick={() => setCollapsed(!collapsed)} className="text-white">
+            <LucideMenu className="w-4 h-4" />
           </Button>
         </div>
 
         <nav className="p-3 flex-1 overflow-auto">
           {user &&
             navItems
-              .filter((n) => n.roles.includes(user.role?.name ?? ""))
-              .map((n) => (
-                <Link
-                  key={n.path}
-                  to={n.path}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-md ${
-                    isActive(n.path) ? "bg-[#00A3E0] text-white" : "hover:bg-gray-100"
-                  }`}
-                >
-                  {n.icon}
-                  {!collapsed && n.name}
+              .filter((item) => item.roles.includes(user.role?.name ?? ""))
+              .map((item) => (
+                <Link key={item.path} to={item.path} className={`flex items-center gap-3 px-3 py-2 rounded-md my-1 ${isActive(item.path) ? "bg-[#00A3E0] text-white" : "hover:bg-gray-100"}`}>
+                  {item.icon}
+                  {!collapsed && item.name}
                 </Link>
               ))}
         </nav>
 
-        <div className="p-3 border-t">
-          <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-2">
-            <LucideLogOut /> {!collapsed && "Déconnexion"}
+        <div className="p-3 border-t flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-[#D71920] text-white flex items-center justify-center font-semibold">
+            {user?.avatarUrl ? <img src={user.avatarUrl} className="w-full h-full object-cover" /> : avatarInitials(user)}
+          </div>
+
+          {!collapsed && (
+            <div className="flex-1">
+              <div className="text-sm font-medium">{user?.username}</div>
+              <div className="text-xs text-gray-600">{user?.role?.name}</div>
+            </div>
+          )}
+
+          <Button size="sm" variant="ghost" onClick={handleLogout}>
+            <LucideLogOut className="w-4 h-4" />
           </Button>
         </div>
       </aside>
 
       {/* Main */}
       <div className="flex-1 flex flex-col">
-        <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm">
-          <div className="flex items-center gap-4">
-            <h1 className="font-semibold">Dashboard</h1>
-
-            {user && (
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
-                  {user.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt="Avatar"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-sm font-semibold text-white bg-[#00A3E0] w-full h-full flex items-center justify-center">
-                      {avatarInitials(user)}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex flex-col leading-tight">
-                  <span className="text-sm font-semibold">{user.username}</span>
-                  <span className="text-xs text-gray-600 capitalize">{user.role?.name}</span>
-                </div>
-              </div>
-            )}
-          </div>
+        <header className="flex items-center justify-between px-6 py-3 shadow-sm bg-white">
+          <h1 className="text-lg font-semibold">
+            {navItems.find((n) => n.path === location.pathname)?.name || "Dashboard"}
+          </h1>
 
           <Button size="sm" variant="outline" onClick={fetchProfile}>
             <LucideRefreshCw className="w-4 h-4 mr-2" /> Rafraîchir
           </Button>
         </header>
 
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-6 overflow-auto bg-[#F1F3F5]">
           <Outlet />
         </main>
       </div>
