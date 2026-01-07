@@ -63,7 +63,7 @@ const DashboardLayout: React.FC = () => {
     { name: "Modules (Cours)", path: "/dashboard/modules", icon: <LucideBook className="w-5 h-5" />, roles: ["admin", "secretary", "DE"] },
     { name: "Modules (Cours)", path: "/dashboard/ModulesEtudiant", icon: <LucideBook className="w-5 h-5" />, roles: ["student"] },
     { name: "Mes Modules (Cours)", path: "/dashboard/ModulesEnseignant", icon: <LucideBook className="w-5 h-5" />, roles: ["teacher"] },
-    { name: "Notes des EO", path: "/dashboard/notes", icon: <LucideClipboard className="w-5 h-5" />, roles: ["admin", "secretary", "DE"] },
+    { name: "Notes des EO", path: "/dashboard/notes", icon: <LucideClipboard className="w-5 h-5" />, roles: ["admin", "teacher", "secretary", "DE"] },
     { name: "Notes des EO", path: "/dashboard/NotesEnseignant", icon: <LucideClipboard className="w-5 h-5" />, roles: ["teacher"] },
     { name: "Mes Notes", path: "/dashboard/NotesEtudiant", icon: <LucideClipboard className="w-5 h-5" />, roles: ["student"] },
     { name: "Bulletins", path: "/dashboard/bulletins", icon: <LucideClipboard className="w-5 h-5" />, roles: ["admin", "secretary", "DE"] },
