@@ -12,10 +12,10 @@ export default defineConfig({
   build: {
     sourcemap: false,
     rollupOptions: {
-      external: [], // on vide totalement les externals
+      external: [],
     },
     commonjsOptions: {
-      include: [/node_modules/], // oblige la bundlisation
+      include: [/node_modules/],
     },
   },
 });
