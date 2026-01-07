@@ -88,8 +88,7 @@ setModules(res.data.data || []);
   const fetchStudents = async (moduleId: string) => {
     try {
       const res = await api.get(`/students/by-module/${moduleId}`);
-setStudents(res.data || []);
-
+      setStudents(Array.isArray(res.data) ? res.data : []);
     } catch {
       setStudents([]);
     }
@@ -301,17 +300,16 @@ setNotes(res.data.data || []);
 
               <label className="block mb-1 text-sm font-medium">Étudiant</label>
               <select
-                value={noteForm.studentId}
-                onChange={(e) => setNoteForm({ ...noteForm, studentId: e.target.value })}
-                className="border rounded w-full mb-3 p-2"
-              >
-                <option value="">-- Sélectionner un étudiant --</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nom} {s.prenom} ({s.matricule})
-                  </option>
-                ))}
-              </select>
+  value={noteForm.studentId}
+  onChange={(e) => setNoteForm({ ...noteForm, studentId: e.target.value })}
+>
+  <option value="">-- Sélectionner un étudiant --</option>
+  {students.map((s) => (
+    <option key={s.id} value={s.id}>
+      {s.nom} {s.prenom} ({s.matricule})
+    </option>
+  ))}
+</select>
 
               <Input
                 placeholder="Note EC"
