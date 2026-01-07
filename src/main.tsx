@@ -27,7 +27,6 @@ import ModulesEnseignant from "./pages/dashboard/ModulesEnseignant";
 import ModulesEtudiant from "./pages/dashboard/ModulesEtudiant";
 
 import Notes from "./pages/dashboard/Notes";
-import NotesEnseignant from "./pages/dashboard/NotesEnseignant";
 import NotesEtudiant from "./pages/dashboard/NotesEtudiant";
 
 import Bulletins from "./pages/dashboard/Bulletins";
@@ -83,7 +82,6 @@ root.render(
 
             {/* 📝 Notes */}
             <Route path="notes" element={<Notes />} />
-            <Route path="NotesEnseignant" element={<NotesEnseignant />} />
             <Route path="NotesEtudiant" element={<NotesEtudiant />} />
 
             {/* 📄 Bulletins */}
