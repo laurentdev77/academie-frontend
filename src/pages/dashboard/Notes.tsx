@@ -113,8 +113,10 @@ const Notes: React.FC = () => {
         const modulesData = Array.isArray(mRes.data?.data) ? mRes.data.data : [];
         setModules(modulesData);
 
-        const studentRes = await api.get("/students?modules=" + modulesData.map((m:any)=>m.id).join(","));
-        setStudents(Array.isArray(studentRes.data?.data) ? studentRes.data.data : []);
+        if (modulesData.length) {
+          const studentRes = await api.get("/students?modules=" + modulesData.map((m:any)=>m.id).join(","));
+          setStudents(Array.isArray(studentRes.data?.data) ? studentRes.data.data : []);
+        }
 
         setPromotions([]);
         setFilieres([]);
@@ -163,12 +165,29 @@ const Notes: React.FC = () => {
   // -----------------------------
   // FORM HANDLERS
   // -----------------------------
-  const openAddForm = () => {
-    if (!students.length || !modules.length) return;
+  const fetchStudentsForModule = async (moduleId: string) => {
+    try {
+      const res = await api.get(`/students?modules=${moduleId}`);
+      return Array.isArray(res.data?.data) ? res.data.data : [];
+    } catch (err) {
+      console.error("fetchStudentsForModule error:", err);
+      return [];
+    }
+  };
+
+  const openAddForm = async () => {
+    let selectedModuleId = modules[0]?.id ?? "";
+    let studentsForForm = students;
+
+    if (isTeacher && selectedModuleId) {
+      studentsForForm = await fetchStudentsForModule(selectedModuleId);
+    }
+
+    setStudents(studentsForForm);
     setEditingNote(null);
     setForm({
-      studentId: students[0]?.id ?? "",
-      moduleId: modules[0]?.id ?? "",
+      studentId: studentsForForm[0]?.id ?? "",
+      moduleId: selectedModuleId,
       ce: "",
       fe: "",
       session: "Normale",
@@ -178,7 +197,13 @@ const Notes: React.FC = () => {
     setShowForm(true);
   };
 
-  const openEditForm = (n: NoteItem) => {
+  const openEditForm = async (n: NoteItem) => {
+    let studentsForForm = students;
+    if (isTeacher && n.moduleId) {
+      studentsForForm = await fetchStudentsForModule(n.moduleId);
+    }
+
+    setStudents(studentsForForm);
     setEditingNote(n);
     setForm({
       studentId: n.studentId,
@@ -400,7 +425,15 @@ const Notes: React.FC = () => {
               </Select>
 
               <label className="text-sm">Module</label>
-              <Select value={form.moduleId} onChange={(e) => setForm({ ...form, moduleId: e.target.value })}>
+              <Select value={form.moduleId} onChange={async (e) => {
+                const newModuleId = e.target.value;
+                setForm({ ...form, moduleId: newModuleId });
+                if (isTeacher && newModuleId) {
+                  const studentsForModule = await fetchStudentsForModule(newModuleId);
+                  setStudents(studentsForModule);
+                  setForm((f) => ({ ...f, studentId: studentsForModule[0]?.id ?? "" }));
+                }
+              }}>
                 <option value="">-- Choisir un module --</option>
                 {modules.map((m) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
               </Select>
