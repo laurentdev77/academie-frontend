@@ -12,9 +12,9 @@ import { LucideEdit, LucideTrash2, LucideRefreshCw, LucideDownload } from "lucid
 // Types
 // -----------------------------
 interface Filiere { id: number; nom: string; }
-interface Promotion { id: number; nom?: string; annee?: number; filiereId?: number | null; filiere?: Filiere | null; }
+interface Promotion { id?: number; nom?: string; annee?: number; filiereId?: number | null; filiere?: Filiere | null; }
 interface ModuleType { id: string; nom?: string; title?: string; code?: string; promotionId?: number | null; promotion?: Promotion | null; }
-interface Student { id: string; matricule?: string; nom: string; prenom?: string; promotionId?: number | null; promotion?: Promotion | null; }
+interface Student { id: string; matricule?: string; nom?: string; prenom?: string; promotionId?: number | null; promotion?: Promotion | null; }
 interface NoteItem {
   id: string;
   studentId: string;
@@ -104,22 +104,23 @@ const Notes: React.FC = () => {
           api.get("/promotions"),
           api.get("/filieres"),
         ]);
-        setModules(Array.isArray(mRes.data?.data) ? mRes.data.data : []);
-        setStudents(Array.isArray(sRes.data?.data) ? sRes.data.data : []);
-        setPromotions(Array.isArray(pRes.data?.data) ? pRes.data.data : []);
-        setFilieres(Array.isArray(fRes.data?.data) ? fRes.data.data : []);
+        setModules(Array.isArray(mRes.data) ? mRes.data : []);
+        setStudents(Array.isArray(sRes.data) ? sRes.data : []);
+        setPromotions(Array.isArray(pRes.data) ? pRes.data : []);
+        setFilieres(Array.isArray(fRes.data) ? fRes.data : []);
       } else if (isTeacher) {
         const mRes = await api.get("/modules/my");
-        const modulesData = Array.isArray(mRes.data?.data) ? mRes.data.data : [];
+        const modulesData = Array.isArray(mRes.data) ? mRes.data : [];
         setModules(modulesData);
 
-        if (modulesData.length) {
-          const studentRes = await api.get("/students?modules=" + modulesData.map((m:any)=>m.id).join(","));
-          setStudents(Array.isArray(studentRes.data?.data) ? studentRes.data.data : []);
+        // Étudiants par module (fusion + suppression doublons)
+        let allStudents: Student[] = [];
+        for (const m of modulesData) {
+          const sRes = await api.get(`/students/by-module/${m.id}`);
+          if (Array.isArray(sRes.data)) allStudents.push(...sRes.data);
         }
-
-        setPromotions([]);
-        setFilieres([]);
+        allStudents = allStudents.filter((s, i, arr) => arr.findIndex(st => st.id === s.id) === i);
+        setStudents(allStudents);
       }
     } catch (err) {
       console.error("fetchAllStatic error:", err);
@@ -148,7 +149,6 @@ const Notes: React.FC = () => {
         if (moduleId !== "all") params.moduleId = moduleId;
         if (session !== "all") params.session = session;
         if (semester) params.semester = semester;
-
         res = await api.get("/notes", { params });
       }
 
@@ -167,8 +167,8 @@ const Notes: React.FC = () => {
   // -----------------------------
   const fetchStudentsForModule = async (moduleId: string) => {
     try {
-      const res = await api.get(`/students?modules=${moduleId}`);
-      return Array.isArray(res.data?.data) ? res.data.data : [];
+      const res = await api.get(`/students/by-module/${moduleId}`);
+      return Array.isArray(res.data) ? res.data : [];
     } catch (err) {
       console.error("fetchStudentsForModule error:", err);
       return [];
@@ -176,67 +176,66 @@ const Notes: React.FC = () => {
   };
 
   const openAddForm = async () => {
-  setErrorMsg(null);
-  setSuccessMsg(null);
+    setErrorMsg(null);
+    setSuccessMsg(null);
 
-  // Pour teacher: fetch students si modules sélectionnés
-  let availableStudents = students;
-  if (isTeacher) {
-    try {
-      const res = await api.get("/students?modules=" + modules.map((m:any)=>m.id).join(","));
-      availableStudents = Array.isArray(res.data?.data) ? res.data.data : [];
+    let availableStudents = students;
+
+    if (isTeacher && modules.length) {
+      let allStudents: Student[] = [];
+      for (const m of modules) {
+        const s = await fetchStudentsForModule(m.id);
+        allStudents.push(...s);
+      }
+      availableStudents = allStudents.filter((s, i, arr) => arr.findIndex(st => st.id === s.id) === i);
       setStudents(availableStudents);
-    } catch (err) {
-      console.error("fetch students error:", err);
-      setErrorMsg("Impossible de charger la liste des étudiants.");
+    }
+
+    if (!availableStudents.length || !modules.length) {
+      setErrorMsg("Aucun étudiant ou module disponible pour ajouter une note.");
       return;
     }
-  }
 
-  if (!availableStudents.length || !modules.length) {
-    setErrorMsg("Aucun étudiant ou module disponible pour ajouter une note.");
-    return;
-  }
+    setEditingNote(null);
+    setForm({
+      studentId: availableStudents[0]?.id ?? "",
+      moduleId: modules[0]?.id ?? "",
+      ce: "",
+      fe: "",
+      session: "Normale",
+      semester: "1",
+      appreciation: "",
+    });
+    setShowForm(true);
+  };
 
-  setEditingNote(null);
-  setForm({
-    studentId: availableStudents[0]?.id ?? "",
-    moduleId: modules[0]?.id ?? "",
-    ce: "",
-    fe: "",
-    session: "Normale",
-    semester: "1",
-    appreciation: "",
-  });
-  setShowForm(true);
-};
+  const openEditForm = async (n: NoteItem) => {
+    setEditingNote(n);
 
-const openEditForm = async (n: NoteItem) => {
-  setEditingNote(n);
-
-  // S'assurer que students inclut l'étudiant sélectionné
-  if (!students.find(s => s.id === n.studentId)) {
-    try {
-      const res = await api.get("/students?modules=" + n.moduleId);
-      const fetchedStudents = Array.isArray(res.data?.data) ? res.data.data : [];
-      setStudents(fetchedStudents);
-    } catch (err) {
-      console.error("fetch students error:", err);
-      setErrorMsg("Impossible de charger la liste des étudiants.");
+    // S'assurer que students inclut l'étudiant sélectionné
+    if (!students.find(s => s.id === n.studentId)) {
+      try {
+        const res = await api.get(`/students/by-module/${n.moduleId}`);
+        const fetchedStudents = Array.isArray(res.data) ? res.data : [];
+        const uniqueStudents = fetchedStudents.filter((s, i, arr) => arr.findIndex(st => st.id === s.id) === i);
+        setStudents(uniqueStudents);
+      } catch (err) {
+        console.error("fetch students error:", err);
+        setErrorMsg("Impossible de charger la liste des étudiants.");
+      }
     }
-  }
 
-  setForm({
-    studentId: n.studentId,
-    moduleId: n.moduleId,
-    ce: n.ce !== undefined && n.ce !== null ? String(n.ce) : "",
-    fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
-    session: n.session ?? "Normale",
-    semester: n.semester ? String(n.semester) : "1",
-    appreciation: n.appreciation ?? "",
-  });
-  setShowForm(true);
-};
+    setForm({
+      studentId: n.studentId,
+      moduleId: n.moduleId,
+      ce: n.ce !== undefined && n.ce !== null ? String(n.ce) : "",
+      fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
+      session: n.session ?? "Normale",
+      semester: n.semester ? String(n.semester) : "1",
+      appreciation: n.appreciation ?? "",
+    });
+    setShowForm(true);
+  };
 
   const handleSubmit = async () => {
     setErrorMsg(null);
@@ -449,10 +448,12 @@ const openEditForm = async (n: NoteItem) => {
               <Select value={form.moduleId} onChange={async (e) => {
                 const newModuleId = e.target.value;
                 setForm({ ...form, moduleId: newModuleId });
+
                 if (isTeacher && newModuleId) {
                   const studentsForModule = await fetchStudentsForModule(newModuleId);
-                  setStudents(studentsForModule);
-                  setForm((f) => ({ ...f, studentId: studentsForModule[0]?.id ?? "" }));
+                  const uniqueStudents = studentsForModule.filter((s, i, arr) => arr.findIndex(st => st.id === s.id) === i);
+                  setStudents(uniqueStudents);
+                  setForm(f => ({ ...f, studentId: uniqueStudents[0]?.id ?? "" }));
                 }
               }}>
                 <option value="">-- Choisir un module --</option>
