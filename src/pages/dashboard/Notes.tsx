@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { LucideEdit, LucideTrash2, LucideRefreshCw, LucideDownload } from "lucide-react";
 
+// -----------------------------
+// Types
+// -----------------------------
 interface Filiere { id: number; nom: string; }
 interface Promotion { id: number; nom?: string; annee?: number; filiereId?: number | null; filiere?: Filiere | null; }
 interface ModuleType { id: string; nom?: string; title?: string; code?: string; promotionId?: number | null; promotion?: Promotion | null; }
@@ -26,17 +29,26 @@ interface NoteItem {
   module?: ModuleType | null;
 }
 
+// -----------------------------
+// Custom Select
+// -----------------------------
 const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) => (
   <select {...props} className="border rounded px-2 py-2 w-full">
     {props.children}
   </select>
 );
 
+// -----------------------------
+// Composant Notes
+// -----------------------------
 const Notes: React.FC = () => {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isAdmin = ["admin", "secretary", "DE"].includes(user?.role?.name);
   const isTeacher = user?.role?.name === "teacher";
 
+  // -----------------------------
+  // États
+  // -----------------------------
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [modules, setModules] = useState<ModuleType[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -59,15 +71,15 @@ const Notes: React.FC = () => {
     fe: "",
     session: "Normale",
     semester: "1",
-    appreciation: "", // corrigé
+    appreciation: "",
   });
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // -------------------------------
-  // Initial load
-  // -------------------------------
+  // -----------------------------
+  // INITIAL LOAD
+  // -----------------------------
   useEffect(() => {
     if (!isAdmin && !isTeacher) return;
     fetchAllStatic();
@@ -80,9 +92,9 @@ const Notes: React.FC = () => {
     return () => clearTimeout(t);
   }, [search, promotionId, moduleId, session, semester]);
 
-  // -------------------------------
-  // FETCHERS
-  // -------------------------------
+  // -----------------------------
+  // FETCH STATIC DATA
+  // -----------------------------
   const fetchAllStatic = async () => {
     try {
       if (isAdmin) {
@@ -113,19 +125,31 @@ const Notes: React.FC = () => {
     }
   };
 
+  // -----------------------------
+  // FETCH NOTES
+  // -----------------------------
   const fetchNotes = async () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const params: any = {};
-      if (search) params.search = search;
-      if (promotionId !== "all") params.promotionId = promotionId;
-      if (moduleId !== "all") params.moduleId = moduleId;
-      if (session !== "all") params.session = session;
-      if (semester) params.semester = semester;
-      if (isTeacher) params.teacherId = user.id;
+      let res;
+      if (isTeacher) {
+        if (moduleId !== "all") {
+          res = await api.get(`/notes/module/${moduleId}`);
+        } else {
+          res = await api.get("/notes/my");
+        }
+      } else {
+        const params: any = {};
+        if (search) params.search = search;
+        if (promotionId !== "all") params.promotionId = promotionId;
+        if (moduleId !== "all") params.moduleId = moduleId;
+        if (session !== "all") params.session = session;
+        if (semester) params.semester = semester;
 
-      const res = await api.get("/notes", { params });
+        res = await api.get("/notes", { params });
+      }
+
       const data = Array.isArray(res.data?.data) ? res.data.data : [];
       setNotes(data);
     } catch (err: any) {
@@ -136,9 +160,9 @@ const Notes: React.FC = () => {
     }
   };
 
-  // -------------------------------
-  // FORM LOGIC (add/edit/delete)
-  // -------------------------------
+  // -----------------------------
+  // FORM HANDLERS
+  // -----------------------------
   const openAddForm = () => {
     if (!students.length || !modules.length) return;
     setEditingNote(null);
@@ -149,7 +173,7 @@ const Notes: React.FC = () => {
       fe: "",
       session: "Normale",
       semester: "1",
-      appreciation: "", // corrigé
+      appreciation: "",
     });
     setShowForm(true);
   };
@@ -163,7 +187,7 @@ const Notes: React.FC = () => {
       fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
       session: n.session ?? "Normale",
       semester: n.semester ? String(n.semester) : "1",
-      appreciation: n.appreciation ?? "", // corrigé
+      appreciation: n.appreciation ?? "",
     });
     setShowForm(true);
   };
@@ -178,13 +202,21 @@ const Notes: React.FC = () => {
       fe: form.fe === "" ? 0 : parseFloat(form.fe),
       session: form.session,
       semester: parseInt(form.semester || "1", 10),
-      appreciation: form.appreciation, // corrigé
+      appreciation: form.appreciation,
     };
     try {
       if (editingNote) {
-        await api.put(`/notes/${editingNote.id}`, payload);
+        if (isTeacher) {
+          await api.put(`/notes/module/${editingNote.moduleId}/${editingNote.id}`, payload);
+        } else {
+          await api.put(`/notes/${editingNote.id}`, payload);
+        }
       } else {
-        await api.post("/notes", payload);
+        if (isTeacher) {
+          await api.post(`/notes/module/${payload.moduleId}/add`, payload);
+        } else {
+          await api.post("/notes", payload);
+        }
       }
       setShowForm(false);
       fetchNotes();
@@ -194,10 +226,14 @@ const Notes: React.FC = () => {
     }
   };
 
-  const deleteNote = async (id: string) => {
+  const deleteNote = async (id: string, moduleId?: string) => {
     if (!window.confirm("Supprimer cette note ?")) return;
     try {
-      await api.delete(`/notes/${id}`);
+      if (isTeacher && moduleId) {
+        await api.delete(`/notes/module/${moduleId}/${id}`);
+      } else {
+        await api.delete(`/notes/${id}`);
+      }
       setSuccessMsg("Note supprimée");
       fetchNotes();
     } catch (err) {
@@ -206,9 +242,9 @@ const Notes: React.FC = () => {
     }
   };
 
-  // -------------------------------
+  // -----------------------------
   // EXPORT EXCEL
-  // -------------------------------
+  // -----------------------------
   const exportToExcel = () => {
     const data = notes.map((n) => {
       const stud = n.student;
@@ -226,7 +262,7 @@ const Notes: React.FC = () => {
         Score: n.score ?? "",
         Session: n.session ?? "",
         Semestre: n.semester ?? "",
-        Appréciation: n.appreciation ?? "", // corrigé
+        Appréciation: n.appreciation ?? "",
       };
     });
     const ws = XLSX.utils.json_to_sheet(data);
@@ -244,9 +280,9 @@ const Notes: React.FC = () => {
 
   const moduleLabel = (m?: ModuleType | null) => (m ? m.nom ?? m.title ?? m.code ?? m.id : "-");
 
-  // -------------------------------
+  // -----------------------------
   // RENDER
-  // -------------------------------
+  // -----------------------------
   if (!isAdmin && !isTeacher) {
     return (
       <div className="p-6">
@@ -254,10 +290,12 @@ const Notes: React.FC = () => {
       </div>
     );
   }
+
   return (
     <div className="p-6 space-y-4">
+      {/* HEADER */}
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Notes des Elèves Officiers</h2>
+        <h2 className="text-2xl font-bold">Notes des Élèves Officiers</h2>
         <div className="flex gap-2">
           <Button onClick={openAddForm}>Ajouter une note</Button>
           <Button onClick={fetchNotes} variant="outline">
@@ -269,23 +307,20 @@ const Notes: React.FC = () => {
         </div>
       </div>
 
+      {/* ERROR / SUCCESS */}
       {errorMsg && <p className="text-red-600">{errorMsg}</p>}
       {successMsg && <p className="text-green-600">{successMsg}</p>}
 
-      {/* Filtres */}
+      {/* FILTERS */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
         <Input placeholder="Recherche..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={promotionId} onChange={(e) => setPromotionId(e.target.value)}>
           <option value="all">Toutes promotions</option>
-          {promotions.map((p) => (
-            <option key={p.id} value={String(p.id)}>{p.nom ?? `Promotion ${p.id}`}</option>
-          ))}
+          {promotions.map((p) => <option key={p.id} value={String(p.id)}>{p.nom ?? `Promotion ${p.id}`}</option>)}
         </Select>
         <Select value={moduleId} onChange={(e) => setModuleId(e.target.value)}>
           <option value="all">Tous modules</option>
-          {modules.map((m) => (
-            <option key={m.id} value={m.id}>{moduleLabel(m)}</option>
-          ))}
+          {modules.map((m) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
         </Select>
         <Select value={session} onChange={(e) => setSession(e.target.value)}>
           <option value="all">Toutes sessions</option>
@@ -341,7 +376,7 @@ const Notes: React.FC = () => {
                     <button onClick={() => openEditForm(n)} className="p-2 border rounded hover:bg-gray-100" title="Modifier">
                       <LucideEdit className="w-4 h-4" />
                     </button>
-                    <button onClick={() => deleteNote(n.id)} className="p-2 border rounded bg-red-500 text-white hover:opacity-90" title="Supprimer">
+                    <button onClick={() => deleteNote(n.id, n.moduleId)} className="p-2 border rounded bg-red-500 text-white hover:opacity-90" title="Supprimer">
                       <LucideTrash2 className="w-4 h-4" />
                     </button>
                   </td>
