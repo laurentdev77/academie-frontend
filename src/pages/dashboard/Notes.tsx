@@ -1,4 +1,4 @@
-// src/pages/Notes.tsx
+// src/pages/dashboard/Notes.tsx
 import React, { useEffect, useState } from "react";
 import api from "@/services/api";
 import * as XLSX from "xlsx";
@@ -59,7 +59,7 @@ const Notes: React.FC = () => {
     fe: "",
     session: "Normale",
     semester: "1",
-    appreciation: "",
+    appreciation: "", // corrigé
   });
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -69,7 +69,7 @@ const Notes: React.FC = () => {
   // Initial load
   // -------------------------------
   useEffect(() => {
-    if (!isAdmin && !isTeacher) return; 
+    if (!isAdmin && !isTeacher) return;
     fetchAllStatic();
     fetchNotes();
   }, []);
@@ -97,7 +97,7 @@ const Notes: React.FC = () => {
         setPromotions(Array.isArray(pRes.data?.data) ? pRes.data.data : []);
         setFilieres(Array.isArray(fRes.data?.data) ? fRes.data.data : []);
       } else if (isTeacher) {
-        const mRes = await api.get("/modules/my"); 
+        const mRes = await api.get("/modules/my");
         const modulesData = Array.isArray(mRes.data?.data) ? mRes.data.data : [];
         setModules(modulesData);
 
@@ -149,7 +149,7 @@ const Notes: React.FC = () => {
       fe: "",
       session: "Normale",
       semester: "1",
-      appreciation: "",
+      appreciation: "", // corrigé
     });
     setShowForm(true);
   };
@@ -163,7 +163,7 @@ const Notes: React.FC = () => {
       fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
       session: n.session ?? "Normale",
       semester: n.semester ? String(n.semester) : "1",
-      appreciation: n.appreciation ?? "",
+      appreciation: n.appreciation ?? "", // corrigé
     });
     setShowForm(true);
   };
@@ -178,7 +178,7 @@ const Notes: React.FC = () => {
       fe: form.fe === "" ? 0 : parseFloat(form.fe),
       session: form.session,
       semester: parseInt(form.semester || "1", 10),
-      appreciation: form.appreciation,
+      appreciation: form.appreciation, // corrigé
     };
     try {
       if (editingNote) {
@@ -226,7 +226,7 @@ const Notes: React.FC = () => {
         Score: n.score ?? "",
         Session: n.session ?? "",
         Semestre: n.semester ?? "",
-        Appréciation: n.appreciation ?? "",
+        Appréciation: n.appreciation ?? "", // corrigé
       };
     });
     const ws = XLSX.utils.json_to_sheet(data);
@@ -254,7 +254,6 @@ const Notes: React.FC = () => {
       </div>
     );
   }
-
   return (
     <div className="p-6 space-y-4">
       <div className="flex justify-between items-center">
