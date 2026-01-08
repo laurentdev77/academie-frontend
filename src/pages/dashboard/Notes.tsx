@@ -1,7 +1,7 @@
+// src/pages/Notes.tsx
 import React, { useEffect, useState } from "react";
 import api from "@/services/api";
 import * as XLSX from "xlsx";
-// @ts-ignore
 import { saveAs } from "file-saver";
 
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,10 @@ const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) 
 );
 
 const Notes: React.FC = () => {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const isAdmin = ["admin", "secretary", "DE"].includes(user?.role?.name);
+  const isTeacher = user?.role?.name === "teacher";
+
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [modules, setModules] = useState<ModuleType[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -65,16 +69,15 @@ const Notes: React.FC = () => {
   // Initial load
   // -------------------------------
   useEffect(() => {
+    if (!isAdmin && !isTeacher) return; 
     fetchAllStatic();
     fetchNotes();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch when filters / search change (debounced)
   useEffect(() => {
+    if (!isAdmin && !isTeacher) return;
     const t = setTimeout(() => fetchNotes(), 300);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, promotionId, moduleId, session, semester]);
 
   // -------------------------------
@@ -82,20 +85,31 @@ const Notes: React.FC = () => {
   // -------------------------------
   const fetchAllStatic = async () => {
     try {
-      const [mRes, sRes, pRes, fRes] = await Promise.all([
-  api.get("/modules"),
-  api.get("/students"),
-  api.get("/promotions"),
-  api.get("/filieres"),
-]);
+      if (isAdmin) {
+        const [mRes, sRes, pRes, fRes] = await Promise.all([
+          api.get("/modules"),
+          api.get("/students"),
+          api.get("/promotions"),
+          api.get("/filieres"),
+        ]);
+        setModules(Array.isArray(mRes.data?.data) ? mRes.data.data : []);
+        setStudents(Array.isArray(sRes.data?.data) ? sRes.data.data : []);
+        setPromotions(Array.isArray(pRes.data?.data) ? pRes.data.data : []);
+        setFilieres(Array.isArray(fRes.data?.data) ? fRes.data.data : []);
+      } else if (isTeacher) {
+        const mRes = await api.get("/modules/my"); 
+        const modulesData = Array.isArray(mRes.data?.data) ? mRes.data.data : [];
+        setModules(modulesData);
 
-      setModules(Array.isArray(mRes.data?.data) ? mRes.data.data : Array.isArray(mRes.data) ? mRes.data : []);
-      setStudents(Array.isArray(sRes.data?.data) ? sRes.data.data : Array.isArray(sRes.data) ? sRes.data : []);
-      setPromotions(Array.isArray(pRes.data?.data) ? pRes.data.data : Array.isArray(pRes.data) ? pRes.data : []);
-      setFilieres(Array.isArray(fRes.data?.data) ? fRes.data.data : Array.isArray(fRes.data) ? fRes.data : []);
+        const studentRes = await api.get("/students?modules=" + modulesData.map((m:any)=>m.id).join(","));
+        setStudents(Array.isArray(studentRes.data?.data) ? studentRes.data.data : []);
+
+        setPromotions([]);
+        setFilieres([]);
+      }
     } catch (err) {
       console.error("fetchAllStatic error:", err);
-      setErrorMsg("Impossible de charger les données statiques (modules / étudiants / promotions / filières).");
+      setErrorMsg("Impossible de charger les données statiques.");
     }
   };
 
@@ -109,13 +123,10 @@ const Notes: React.FC = () => {
       if (moduleId !== "all") params.moduleId = moduleId;
       if (session !== "all") params.session = session;
       if (semester) params.semester = semester;
+      if (isTeacher) params.teacherId = user.id;
 
-     const res = await api.get("/notes", { params });
-      const data = Array.isArray(res.data?.data)
-        ? res.data.data
-        : Array.isArray(res.data)
-        ? res.data
-        : [];
+      const res = await api.get("/notes", { params });
+      const data = Array.isArray(res.data?.data) ? res.data.data : [];
       setNotes(data);
     } catch (err: any) {
       console.error("fetchNotes error:", err);
@@ -126,9 +137,10 @@ const Notes: React.FC = () => {
   };
 
   // -------------------------------
-  // FORM LOGIC
+  // FORM LOGIC (add/edit/delete)
   // -------------------------------
   const openAddForm = () => {
+    if (!students.length || !modules.length) return;
     setEditingNote(null);
     setForm({
       studentId: students[0]?.id ?? "",
@@ -159,7 +171,6 @@ const Notes: React.FC = () => {
   const handleSubmit = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
-
     const payload = {
       studentId: form.studentId,
       moduleId: form.moduleId,
@@ -169,13 +180,12 @@ const Notes: React.FC = () => {
       semester: parseInt(form.semester || "1", 10),
       appreciation: form.appreciation,
     };
-
     try {
       if (editingNote) {
-  await api.put(`/notes/${editingNote.id}`, payload);
-} else {
-  await api.post("/notes", payload);
-}
+        await api.put(`/notes/${editingNote.id}`, payload);
+      } else {
+        await api.post("/notes", payload);
+      }
       setShowForm(false);
       fetchNotes();
     } catch (err: any) {
@@ -187,7 +197,7 @@ const Notes: React.FC = () => {
   const deleteNote = async (id: string) => {
     if (!window.confirm("Supprimer cette note ?")) return;
     try {
-     await api.delete(`/notes/${id}`);
+      await api.delete(`/notes/${id}`);
       setSuccessMsg("Note supprimée");
       fetchNotes();
     } catch (err) {
@@ -205,13 +215,12 @@ const Notes: React.FC = () => {
       const mod = n.module;
       const promotion = stud?.promotion ?? promotions.find((p) => p.id === stud?.promotionId);
       const filiere = filieres.find((f) => f.id === promotion?.filiereId);
-
       return {
         Étudiant: `${stud?.nom ?? ""} ${stud?.prenom ?? ""}`.trim(),
         Matricule: stud?.matricule ?? "",
         Filière: filiere?.nom ?? "-",
         Promotion: promotion?.nom ?? "-",
-        Module: moduleLabel(mod),
+        Module: mod?.nom ?? mod?.title ?? mod?.code ?? mod?.id,
         CE: n.ce ?? "",
         FE: n.fe ?? "",
         Score: n.score ?? "",
@@ -220,19 +229,12 @@ const Notes: React.FC = () => {
         Appréciation: n.appreciation ?? "",
       };
     });
-
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Notes");
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    const blob = new Blob([wbout], { type: "application/octet-stream" });
-    saveAs(blob, `notes_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    saveAs(new Blob([wbout], { type: "application/octet-stream" }), `notes_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
-
-  // -------------------------------
-  // HELPERS
-  // -------------------------------
-  const moduleLabel = (m?: ModuleType | null) => (m ? m.nom ?? m.title ?? m.code ?? m.id : "-");
 
   const filiereNameFromNote = (n: NoteItem) => {
     const promotion = n.student?.promotion ?? promotions.find((p) => p.id === n.student?.promotionId);
@@ -240,9 +242,19 @@ const Notes: React.FC = () => {
     return fil?.nom ?? "-";
   };
 
+  const moduleLabel = (m?: ModuleType | null) => (m ? m.nom ?? m.title ?? m.code ?? m.id : "-");
+
   // -------------------------------
   // RENDER
   // -------------------------------
+  if (!isAdmin && !isTeacher) {
+    return (
+      <div className="p-6">
+        <p className="text-red-600">Accès réservé aux enseignants et à l’administration</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex justify-between items-center">
@@ -263,21 +275,17 @@ const Notes: React.FC = () => {
 
       {/* Filtres */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-        <Input placeholder="Recherche (étudiant / module)..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input placeholder="Recherche..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={promotionId} onChange={(e) => setPromotionId(e.target.value)}>
           <option value="all">Toutes promotions</option>
           {promotions.map((p) => (
-            <option key={p.id} value={String(p.id)}>
-              {p.nom ?? `Promotion ${p.id}`}
-            </option>
+            <option key={p.id} value={String(p.id)}>{p.nom ?? `Promotion ${p.id}`}</option>
           ))}
         </Select>
         <Select value={moduleId} onChange={(e) => setModuleId(e.target.value)}>
           <option value="all">Tous modules</option>
           {modules.map((m) => (
-            <option key={m.id} value={m.id}>
-              {moduleLabel(m)}
-            </option>
+            <option key={m.id} value={m.id}>{moduleLabel(m)}</option>
           ))}
         </Select>
         <Select value={session} onChange={(e) => setSession(e.target.value)}>
@@ -297,13 +305,13 @@ const Notes: React.FC = () => {
         <table className="min-w-full text-sm text-center border-collapse">
           <thead className="bg-gray-100">
             <tr>
-              <th className="px-2 py-1 border">Elève Officier</th>
+              <th className="px-2 py-1 border">Elève</th>
               <th className="px-2 py-1 border">Matricule</th>
               <th className="px-2 py-1 border">Filière</th>
               <th className="px-2 py-1 border">Promotion</th>
               <th className="px-2 py-1 border">Module</th>
-              <th className="px-2 py-1 border">CE (40%)</th>
-              <th className="px-2 py-1 border">FE (60%)</th>
+              <th className="px-2 py-1 border">CE</th>
+              <th className="px-2 py-1 border">FE</th>
               <th className="px-2 py-1 border">Score</th>
               <th className="px-2 py-1 border">Appréciation</th>
               <th className="px-2 py-1 border">Session</th>
@@ -322,9 +330,7 @@ const Notes: React.FC = () => {
                   <td className="px-2 py-1">{n.student?.nom} {n.student?.prenom}</td>
                   <td className="px-2 py-1">{n.student?.matricule ?? "-"}</td>
                   <td className="px-2 py-1">{filiereNameFromNote(n)}</td>
-                  <td className="px-2 py-1">
-                    {n.student?.promotion?.nom ?? promotions.find((p) => p.id === n.student?.promotionId)?.nom ?? "-"}
-                  </td>
+                  <td className="px-2 py-1">{n.student?.promotion?.nom ?? "-"}</td>
                   <td className="px-2 py-1">{moduleLabel(n.module)}</td>
                   <td className="px-2 py-1">{n.ce ?? "-"}</td>
                   <td className="px-2 py-1">{n.fe ?? "-"}</td>
@@ -333,20 +339,10 @@ const Notes: React.FC = () => {
                   <td className="px-2 py-1">{n.session ?? "-"}</td>
                   <td className="px-2 py-1">{n.semester ?? "-"}</td>
                   <td className="px-2 py-1 flex gap-2 justify-center">
-                    <button
-                      title="Modifier"
-                      onClick={() => openEditForm(n)}
-                      className="p-2 border rounded hover:bg-gray-100"
-                      aria-label="Modifier note"
-                    >
+                    <button onClick={() => openEditForm(n)} className="p-2 border rounded hover:bg-gray-100" title="Modifier">
                       <LucideEdit className="w-4 h-4" />
                     </button>
-                    <button
-                      title="Supprimer"
-                      onClick={() => deleteNote(n.id)}
-                      className="p-2 border rounded bg-red-500 text-white hover:opacity-90"
-                      aria-label="Supprimer note"
-                    >
+                    <button onClick={() => deleteNote(n.id)} className="p-2 border rounded bg-red-500 text-white hover:opacity-90" title="Supprimer">
                       <LucideTrash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -362,26 +358,17 @@ const Notes: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
           <div className="bg-white p-6 rounded-lg w-full max-w-lg shadow-lg">
             <h3 className="text-lg font-semibold mb-4">{editingNote ? "Modifier la note" : "Ajouter une note"}</h3>
-
             <div className="grid grid-cols-1 gap-2">
               <label className="text-sm">Étudiant</label>
               <Select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>
                 <option value="">-- Choisir un étudiant --</option>
-                {students.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.nom} {s.prenom} ({s.matricule ?? "—"})
-                  </option>
-                ))}
+                {students.map((s) => <option key={s.id} value={s.id}>{s.nom} {s.prenom} ({s.matricule ?? "—"})</option>)}
               </Select>
 
               <label className="text-sm">Module</label>
               <Select value={form.moduleId} onChange={(e) => setForm({ ...form, moduleId: e.target.value })}>
                 <option value="">-- Choisir un module --</option>
-                {modules.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {moduleLabel(m)}
-                  </option>
-                ))}
+                {modules.map((m) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
               </Select>
 
               <div className="grid grid-cols-2 gap-2">
@@ -408,12 +395,7 @@ const Notes: React.FC = () => {
               </Select>
 
               <label className="text-sm">Appréciation</label>
-              <textarea
-                className="border rounded px-2 py-2 w-full"
-                rows={3}
-                value={form.appreciation}
-                onChange={(e) => setForm({ ...form, appreciation: e.target.value })}
-              />
+              <textarea className="border rounded px-2 py-2 w-full" rows={3} value={form.appreciation} onChange={(e) => setForm({ ...form, appreciation: e.target.value })} />
 
               <div className="flex gap-2 justify-end mt-3">
                 <Button onClick={handleSubmit}>{editingNote ? "Modifier" : "Enregistrer"}</Button>
