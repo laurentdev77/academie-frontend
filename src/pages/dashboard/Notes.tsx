@@ -176,46 +176,67 @@ const Notes: React.FC = () => {
   };
 
   const openAddForm = async () => {
-    let selectedModuleId = modules[0]?.id ?? "";
-    let studentsForForm = students;
+  setErrorMsg(null);
+  setSuccessMsg(null);
 
-    if (isTeacher && selectedModuleId) {
-      studentsForForm = await fetchStudentsForModule(selectedModuleId);
+  // Pour teacher: fetch students si modules sélectionnés
+  let availableStudents = students;
+  if (isTeacher) {
+    try {
+      const res = await api.get("/students?modules=" + modules.map((m:any)=>m.id).join(","));
+      availableStudents = Array.isArray(res.data?.data) ? res.data.data : [];
+      setStudents(availableStudents);
+    } catch (err) {
+      console.error("fetch students error:", err);
+      setErrorMsg("Impossible de charger la liste des étudiants.");
+      return;
     }
+  }
 
-    setStudents(studentsForForm);
-    setEditingNote(null);
-    setForm({
-      studentId: studentsForForm[0]?.id ?? "",
-      moduleId: selectedModuleId,
-      ce: "",
-      fe: "",
-      session: "Normale",
-      semester: "1",
-      appreciation: "",
-    });
-    setShowForm(true);
-  };
+  if (!availableStudents.length || !modules.length) {
+    setErrorMsg("Aucun étudiant ou module disponible pour ajouter une note.");
+    return;
+  }
 
-  const openEditForm = async (n: NoteItem) => {
-    let studentsForForm = students;
-    if (isTeacher && n.moduleId) {
-      studentsForForm = await fetchStudentsForModule(n.moduleId);
+  setEditingNote(null);
+  setForm({
+    studentId: availableStudents[0]?.id ?? "",
+    moduleId: modules[0]?.id ?? "",
+    ce: "",
+    fe: "",
+    session: "Normale",
+    semester: "1",
+    appreciation: "",
+  });
+  setShowForm(true);
+};
+
+const openEditForm = async (n: NoteItem) => {
+  setEditingNote(n);
+
+  // S'assurer que students inclut l'étudiant sélectionné
+  if (!students.find(s => s.id === n.studentId)) {
+    try {
+      const res = await api.get("/students?modules=" + n.moduleId);
+      const fetchedStudents = Array.isArray(res.data?.data) ? res.data.data : [];
+      setStudents(fetchedStudents);
+    } catch (err) {
+      console.error("fetch students error:", err);
+      setErrorMsg("Impossible de charger la liste des étudiants.");
     }
+  }
 
-    setStudents(studentsForForm);
-    setEditingNote(n);
-    setForm({
-      studentId: n.studentId,
-      moduleId: n.moduleId,
-      ce: n.ce !== undefined && n.ce !== null ? String(n.ce) : "",
-      fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
-      session: n.session ?? "Normale",
-      semester: n.semester ? String(n.semester) : "1",
-      appreciation: n.appreciation ?? "",
-    });
-    setShowForm(true);
-  };
+  setForm({
+    studentId: n.studentId,
+    moduleId: n.moduleId,
+    ce: n.ce !== undefined && n.ce !== null ? String(n.ce) : "",
+    fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
+    session: n.session ?? "Normale",
+    semester: n.semester ? String(n.semester) : "1",
+    appreciation: n.appreciation ?? "",
+  });
+  setShowForm(true);
+};
 
   const handleSubmit = async () => {
     setErrorMsg(null);
