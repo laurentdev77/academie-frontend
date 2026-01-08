@@ -12,9 +12,33 @@ import { LucideEdit, LucideTrash2, LucideRefreshCw, LucideDownload } from "lucid
 // Types
 // -----------------------------
 interface Filiere { id: number; nom: string; }
-interface Promotion { id?: number; nom?: string; annee?: number; filiereId?: number | null; filiere?: Filiere | null; }
-interface ModuleType { id: string; nom?: string; title?: string; code?: string; promotionId?: number | null; promotion?: Promotion | null; }
-interface Student { id: string; matricule?: string; nom?: string; prenom?: string; promotionId?: number | null; promotion?: Promotion | null; }
+
+interface Promotion {
+  id: number;
+  nom?: string;
+  annee?: number;
+  filiereId?: number | null;
+  filiere?: Filiere | null;
+}
+
+interface ModuleType {
+  id: string;
+  nom?: string;
+  title?: string;
+  code?: string;
+  promotionId?: number | null;
+  promotion?: Promotion | null;
+}
+
+interface Student {
+  id: string;
+  matricule?: string;
+  nom?: string;
+  prenom?: string;
+  promotionId?: number | null;
+  promotion?: Promotion | null;
+}
+
 interface NoteItem {
   id: string;
   studentId: string;
@@ -42,7 +66,7 @@ const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) 
 // Composant Notes
 // -----------------------------
 const Notes: React.FC = () => {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user: any = JSON.parse(localStorage.getItem("user") || "{}");
   const isAdmin = ["admin", "secretary", "DE"].includes(user?.role?.name);
   const isTeacher = user?.role?.name === "teacher";
 
@@ -110,16 +134,15 @@ const Notes: React.FC = () => {
         setFilieres(Array.isArray(fRes.data) ? fRes.data : []);
       } else if (isTeacher) {
         const mRes = await api.get("/modules/my");
-        const modulesData = Array.isArray(mRes.data) ? mRes.data : [];
+        const modulesData: ModuleType[] = Array.isArray(mRes.data) ? mRes.data : [];
         setModules(modulesData);
 
-        // Étudiants par module (fusion + suppression doublons)
+        // Étudiants par module
         let allStudents: Student[] = [];
         for (const m of modulesData) {
           const sRes = await api.get(`/students/by-module/${m.id}`);
-          if (Array.isArray(sRes.data)) allStudents.push(...sRes.data);
+          if (Array.isArray(sRes.data)) allStudents = [...allStudents, ...sRes.data];
         }
-        allStudents = allStudents.filter((s, i, arr) => arr.findIndex(st => st.id === s.id) === i);
         setStudents(allStudents);
       }
     } catch (err) {
@@ -149,10 +172,11 @@ const Notes: React.FC = () => {
         if (moduleId !== "all") params.moduleId = moduleId;
         if (session !== "all") params.session = session;
         if (semester) params.semester = semester;
+
         res = await api.get("/notes", { params });
       }
 
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
+      const data: NoteItem[] = Array.isArray(res.data?.data) ? res.data.data : [];
       setNotes(data);
     } catch (err: any) {
       console.error("fetchNotes error:", err);
@@ -165,7 +189,7 @@ const Notes: React.FC = () => {
   // -----------------------------
   // FORM HANDLERS
   // -----------------------------
-  const fetchStudentsForModule = async (moduleId: string) => {
+  const fetchStudentsForModule = async (moduleId: string): Promise<Student[]> => {
     try {
       const res = await api.get(`/students/by-module/${moduleId}`);
       return Array.isArray(res.data) ? res.data : [];
@@ -179,7 +203,7 @@ const Notes: React.FC = () => {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    let availableStudents = students;
+    let availableStudents: Student[] = students;
 
     if (isTeacher && modules.length) {
       let allStudents: Student[] = [];
@@ -187,7 +211,7 @@ const Notes: React.FC = () => {
         const s = await fetchStudentsForModule(m.id);
         allStudents.push(...s);
       }
-      availableStudents = allStudents.filter((s, i, arr) => arr.findIndex(st => st.id === s.id) === i);
+      availableStudents = allStudents;
       setStudents(availableStudents);
     }
 
@@ -212,13 +236,11 @@ const Notes: React.FC = () => {
   const openEditForm = async (n: NoteItem) => {
     setEditingNote(n);
 
-    // S'assurer que students inclut l'étudiant sélectionné
-    if (!students.find(s => s.id === n.studentId)) {
+    if (!students.find((s: Student) => s.id === n.studentId)) {
       try {
         const res = await api.get(`/students/by-module/${n.moduleId}`);
-        const fetchedStudents = Array.isArray(res.data) ? res.data : [];
-        const uniqueStudents = fetchedStudents.filter((s, i, arr) => arr.findIndex(st => st.id === s.id) === i);
-        setStudents(uniqueStudents);
+        const fetchedStudents: Student[] = Array.isArray(res.data) ? res.data : [];
+        setStudents(fetchedStudents);
       } catch (err) {
         console.error("fetch students error:", err);
         setErrorMsg("Impossible de charger la liste des étudiants.");
@@ -291,11 +313,11 @@ const Notes: React.FC = () => {
   // EXPORT EXCEL
   // -----------------------------
   const exportToExcel = () => {
-    const data = notes.map((n) => {
+    const data = notes.map((n: NoteItem) => {
       const stud = n.student;
       const mod = n.module;
-      const promotion = stud?.promotion ?? promotions.find((p) => p.id === stud?.promotionId);
-      const filiere = filieres.find((f) => f.id === promotion?.filiereId);
+      const promotion = stud?.promotion ?? promotions.find((p: Promotion) => p.id === stud?.promotionId);
+      const filiere = filieres.find((f: Filiere) => f.id === promotion?.filiereId);
       return {
         Étudiant: `${stud?.nom ?? ""} ${stud?.prenom ?? ""}`.trim(),
         Matricule: stud?.matricule ?? "",
@@ -318,8 +340,8 @@ const Notes: React.FC = () => {
   };
 
   const filiereNameFromNote = (n: NoteItem) => {
-    const promotion = n.student?.promotion ?? promotions.find((p) => p.id === n.student?.promotionId);
-    const fil = filieres.find((f) => f.id === promotion?.filiereId);
+    const promotion = n.student?.promotion ?? promotions.find((p: Promotion) => p.id === n.student?.promotionId);
+    const fil = filieres.find((f: Filiere) => f.id === promotion?.filiereId);
     return fil?.nom ?? "-";
   };
 
@@ -361,11 +383,15 @@ const Notes: React.FC = () => {
         <Input placeholder="Recherche..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={promotionId} onChange={(e) => setPromotionId(e.target.value)}>
           <option value="all">Toutes promotions</option>
-          {promotions.map((p) => <option key={p.id} value={String(p.id)}>{p.nom ?? `Promotion ${p.id}`}</option>)}
+          {promotions.map((p: Promotion) => (
+            <option key={p.id} value={String(p.id)}>{p.nom ?? `Promotion ${p.id}`}</option>
+          ))}
         </Select>
         <Select value={moduleId} onChange={(e) => setModuleId(e.target.value)}>
           <option value="all">Tous modules</option>
-          {modules.map((m) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
+          {modules.map((m: ModuleType) => (
+            <option key={m.id} value={m.id}>{moduleLabel(m)}</option>
+          ))}
         </Select>
         <Select value={session} onChange={(e) => setSession(e.target.value)}>
           <option value="all">Toutes sessions</option>
@@ -404,7 +430,7 @@ const Notes: React.FC = () => {
             ) : notes.length === 0 ? (
               <tr><td colSpan={12} className="py-4 text-gray-500">Aucune note trouvée</td></tr>
             ) : (
-              notes.map((n) => (
+              notes.map((n: NoteItem) => (
                 <tr key={n.id} className="hover:bg-gray-50">
                   <td className="px-2 py-1">{n.student?.nom} {n.student?.prenom}</td>
                   <td className="px-2 py-1">{n.student?.matricule ?? "-"}</td>
@@ -441,7 +467,9 @@ const Notes: React.FC = () => {
               <label className="text-sm">Étudiant</label>
               <Select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>
                 <option value="">-- Choisir un étudiant --</option>
-                {students.map((s) => <option key={s.id} value={s.id}>{s.nom} {s.prenom} ({s.matricule ?? "—"})</option>)}
+                {students.map((s: Student) => (
+                  <option key={s.id} value={s.id}>{s.nom} {s.prenom} ({s.matricule ?? "—"})</option>
+                ))}
               </Select>
 
               <label className="text-sm">Module</label>
@@ -451,13 +479,12 @@ const Notes: React.FC = () => {
 
                 if (isTeacher && newModuleId) {
                   const studentsForModule = await fetchStudentsForModule(newModuleId);
-                  const uniqueStudents = studentsForModule.filter((s, i, arr) => arr.findIndex(st => st.id === s.id) === i);
-                  setStudents(uniqueStudents);
-                  setForm(f => ({ ...f, studentId: uniqueStudents[0]?.id ?? "" }));
+                  setStudents(studentsForModule);
+                  setForm(f => ({ ...f, studentId: studentsForModule[0]?.id ?? "" }));
                 }
               }}>
                 <option value="">-- Choisir un module --</option>
-                {modules.map((m) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
+                {modules.map((m: ModuleType) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
               </Select>
 
               <div className="grid grid-cols-2 gap-2">
