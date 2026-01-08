@@ -12,33 +12,9 @@ import { LucideEdit, LucideTrash2, LucideRefreshCw, LucideDownload } from "lucid
 // Types
 // -----------------------------
 interface Filiere { id: number; nom: string; }
-
-interface Promotion {
-  id: number;
-  nom?: string;
-  annee?: number;
-  filiereId?: number | null;
-  filiere?: Filiere | null;
-}
-
-interface ModuleType {
-  id: string;
-  nom?: string;
-  title?: string;
-  code?: string;
-  promotionId?: number | null;
-  promotion?: Promotion | null;
-}
-
-interface Student {
-  id: string;
-  matricule?: string;
-  nom?: string;
-  prenom?: string;
-  promotionId?: number | null;
-  promotion?: Promotion | null;
-}
-
+interface Promotion { id: number; nom?: string; annee?: number; filiereId?: number | null; filiere?: Filiere | null; }
+interface ModuleType { id: string; nom?: string; title?: string; code?: string; promotionId?: number | null; promotion?: Promotion | null; }
+interface Student { id: string; matricule?: string; nom: string; prenom?: string; promotionId?: number | null; promotion?: Promotion | null; }
 interface NoteItem {
   id: string;
   studentId: string;
@@ -66,7 +42,7 @@ const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) 
 // Composant Notes
 // -----------------------------
 const Notes: React.FC = () => {
-  const user: any = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isAdmin = ["admin", "secretary", "DE"].includes(user?.role?.name);
   const isTeacher = user?.role?.name === "teacher";
 
@@ -128,20 +104,20 @@ const Notes: React.FC = () => {
           api.get("/promotions"),
           api.get("/filieres"),
         ]);
-        setModules(Array.isArray(mRes.data) ? mRes.data : []);
-        setStudents(Array.isArray(sRes.data) ? sRes.data : []);
-        setPromotions(Array.isArray(pRes.data) ? pRes.data : []);
-        setFilieres(Array.isArray(fRes.data) ? fRes.data : []);
+        setModules(Array.isArray(mRes.data?.data) ? mRes.data.data : []);
+        setStudents(Array.isArray(sRes.data?.data) ? sRes.data.data : []);
+        setPromotions(Array.isArray(pRes.data?.data) ? pRes.data.data : []);
+        setFilieres(Array.isArray(fRes.data?.data) ? fRes.data.data : []);
       } else if (isTeacher) {
         const mRes = await api.get("/modules/my");
-        const modulesData: ModuleType[] = Array.isArray(mRes.data) ? mRes.data : [];
+        const modulesData: ModuleType[] = Array.isArray(mRes.data?.data) ? mRes.data.data : [];
         setModules(modulesData);
 
-        // Étudiants par module
-        let allStudents: Student[] = [];
+        // Charger tous les étudiants pour les modules du teacher
+        const allStudents: Student[] = [];
         for (const m of modulesData) {
           const sRes = await api.get(`/students/by-module/${m.id}`);
-          if (Array.isArray(sRes.data)) allStudents = [...allStudents, ...sRes.data];
+          if (Array.isArray(sRes.data?.data)) allStudents.push(...sRes.data.data);
         }
         setStudents(allStudents);
       }
@@ -160,11 +136,9 @@ const Notes: React.FC = () => {
     try {
       let res;
       if (isTeacher) {
-        if (moduleId !== "all") {
-          res = await api.get(`/notes/module/${moduleId}`);
-        } else {
-          res = await api.get("/notes/my");
-        }
+        res = moduleId !== "all"
+          ? await api.get(`/notes/module/${moduleId}`)
+          : await api.get("/notes/my");
       } else {
         const params: any = {};
         if (search) params.search = search;
@@ -172,10 +146,8 @@ const Notes: React.FC = () => {
         if (moduleId !== "all") params.moduleId = moduleId;
         if (session !== "all") params.session = session;
         if (semester) params.semester = semester;
-
         res = await api.get("/notes", { params });
       }
-
       const data: NoteItem[] = Array.isArray(res.data?.data) ? res.data.data : [];
       setNotes(data);
     } catch (err: any) {
@@ -187,103 +159,117 @@ const Notes: React.FC = () => {
   };
 
   // -----------------------------
-  // FORM HANDLERS
+  // FETCH STUDENTS BY MODULE
   // -----------------------------
   const fetchStudentsForModule = async (moduleId: string): Promise<Student[]> => {
     try {
       const res = await api.get(`/students/by-module/${moduleId}`);
-      return Array.isArray(res.data) ? res.data : [];
+      return Array.isArray(res.data?.data) ? res.data.data : [];
     } catch (err) {
       console.error("fetchStudentsForModule error:", err);
       return [];
     }
   };
 
+  // -----------------------------
+  // OPEN ADD FORM
+  // -----------------------------
   const openAddForm = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    let availableStudents: Student[] = students;
-
-    if (isTeacher && modules.length) {
-      let allStudents: Student[] = [];
-      for (const m of modules) {
-        const s = await fetchStudentsForModule(m.id);
-        allStudents.push(...s);
-      }
-      availableStudents = allStudents;
-      setStudents(availableStudents);
+    // Vérifier modules
+    if (!modules.length) {
+      setErrorMsg("Aucun module disponible.");
+      return;
     }
 
-    if (!availableStudents.length || !modules.length) {
-      setErrorMsg("Aucun étudiant ou module disponible pour ajouter une note.");
+    let availableStudents: Student[] = [];
+
+    if (isAdmin) {
+      availableStudents = students;
+    } else if (isTeacher) {
+      // Tous les étudiants des modules du teacher
+      for (const m of modules) {
+        const s = await fetchStudentsForModule(m.id);
+        availableStudents.push(...s);
+      }
+    }
+
+    if (!availableStudents.length) {
+      setErrorMsg("Aucun étudiant disponible pour ajouter une note.");
       return;
     }
 
     setEditingNote(null);
     setForm({
-      studentId: availableStudents[0]?.id ?? "",
-      moduleId: modules[0]?.id ?? "",
+      studentId: availableStudents[0].id,
+      moduleId: modules[0].id,
       ce: "",
       fe: "",
       session: "Normale",
       semester: "1",
       appreciation: "",
     });
+    setStudents(availableStudents);
     setShowForm(true);
   };
 
-  const openEditForm = async (n: NoteItem) => {
-    setEditingNote(n);
+  // -----------------------------
+  // OPEN EDIT FORM
+  // -----------------------------
+  const openEditForm = async (note: NoteItem) => {
+    setEditingNote(note);
 
-    if (!students.find((s: Student) => s.id === n.studentId)) {
-      try {
-        const res = await api.get(`/students/by-module/${n.moduleId}`);
-        const fetchedStudents: Student[] = Array.isArray(res.data) ? res.data : [];
-        setStudents(fetchedStudents);
-      } catch (err) {
-        console.error("fetch students error:", err);
-        setErrorMsg("Impossible de charger la liste des étudiants.");
-      }
+    // S'assurer que l'étudiant est dans la liste
+    if (!students.find((s) => s.id === note.studentId)) {
+      const fetchedStudents = await fetchStudentsForModule(note.moduleId);
+      setStudents(fetchedStudents);
     }
 
     setForm({
-      studentId: n.studentId,
-      moduleId: n.moduleId,
-      ce: n.ce !== undefined && n.ce !== null ? String(n.ce) : "",
-      fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
-      session: n.session ?? "Normale",
-      semester: n.semester ? String(n.semester) : "1",
-      appreciation: n.appreciation ?? "",
+      studentId: note.studentId,
+      moduleId: note.moduleId,
+      ce: note.ce != null ? String(note.ce) : "",
+      fe: note.fe != null ? String(note.fe) : "",
+      session: note.session ?? "Normale",
+      semester: note.semester ? String(note.semester) : "1",
+      appreciation: note.appreciation ?? "",
     });
+
     setShowForm(true);
   };
 
+  // -----------------------------
+  // SUBMIT FORM
+  // -----------------------------
   const handleSubmit = async () => {
     setErrorMsg(null);
     setSuccessMsg(null);
+
     const payload = {
       studentId: form.studentId,
       moduleId: form.moduleId,
       ce: form.ce === "" ? 0 : parseFloat(form.ce),
       fe: form.fe === "" ? 0 : parseFloat(form.fe),
       session: form.session,
-      semester: parseInt(form.semester || "1", 10),
+      semester: parseInt(form.semester, 10),
       appreciation: form.appreciation,
     };
+
     try {
       if (editingNote) {
-        if (isTeacher) {
-          await api.put(`/notes/module/${editingNote.moduleId}/${editingNote.id}`, payload);
-        } else {
-          await api.put(`/notes/${editingNote.id}`, payload);
-        }
+        await api.put(
+          isTeacher
+            ? `/notes/module/${editingNote.moduleId}/${editingNote.id}`
+            : `/notes/${editingNote.id}`,
+          payload
+        );
       } else {
-        if (isTeacher) {
-          await api.post(`/notes/module/${payload.moduleId}/add`, payload);
-        } else {
-          await api.post("/notes", payload);
-        }
+        await api.post(
+          isTeacher ? `/notes/module/${payload.moduleId}/add` : "/notes",
+          payload
+        );
       }
       setShowForm(false);
       fetchNotes();
@@ -293,6 +279,9 @@ const Notes: React.FC = () => {
     }
   };
 
+  // -----------------------------
+  // DELETE NOTE
+  // -----------------------------
   const deleteNote = async (id: string, moduleId?: string) => {
     if (!window.confirm("Supprimer cette note ?")) return;
     try {
@@ -313,11 +302,11 @@ const Notes: React.FC = () => {
   // EXPORT EXCEL
   // -----------------------------
   const exportToExcel = () => {
-    const data = notes.map((n: NoteItem) => {
+    const data = notes.map((n) => {
       const stud = n.student;
       const mod = n.module;
-      const promotion = stud?.promotion ?? promotions.find((p: Promotion) => p.id === stud?.promotionId);
-      const filiere = filieres.find((f: Filiere) => f.id === promotion?.filiereId);
+      const promotion = stud?.promotion ?? promotions.find((p) => p.id === stud?.promotionId);
+      const filiere = filieres.find((f) => f.id === promotion?.filiereId);
       return {
         Étudiant: `${stud?.nom ?? ""} ${stud?.prenom ?? ""}`.trim(),
         Matricule: stud?.matricule ?? "",
@@ -336,12 +325,18 @@ const Notes: React.FC = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Notes");
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([wbout], { type: "application/octet-stream" }), `notes_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    saveAs(
+      new Blob([wbout], { type: "application/octet-stream" }),
+      `notes_export_${new Date().toISOString().slice(0, 10)}.xlsx`
+    );
   };
 
+  // -----------------------------
+  // UTILITAIRES
+  // -----------------------------
   const filiereNameFromNote = (n: NoteItem) => {
-    const promotion = n.student?.promotion ?? promotions.find((p: Promotion) => p.id === n.student?.promotionId);
-    const fil = filieres.find((f: Filiere) => f.id === promotion?.filiereId);
+    const promotion = n.student?.promotion ?? promotions.find((p) => p.id === n.student?.promotionId);
+    const fil = filieres.find((f) => f.id === promotion?.filiereId);
     return fil?.nom ?? "-";
   };
 
@@ -383,14 +378,18 @@ const Notes: React.FC = () => {
         <Input placeholder="Recherche..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={promotionId} onChange={(e) => setPromotionId(e.target.value)}>
           <option value="all">Toutes promotions</option>
-          {promotions.map((p: Promotion) => (
-            <option key={p.id} value={String(p.id)}>{p.nom ?? `Promotion ${p.id}`}</option>
+          {promotions.map((p) => (
+            <option key={p.id} value={String(p.id)}>
+              {p.nom ?? `Promotion ${p.id}`}
+            </option>
           ))}
         </Select>
         <Select value={moduleId} onChange={(e) => setModuleId(e.target.value)}>
           <option value="all">Tous modules</option>
-          {modules.map((m: ModuleType) => (
-            <option key={m.id} value={m.id}>{moduleLabel(m)}</option>
+          {modules.map((m) => (
+            <option key={m.id} value={m.id}>
+              {moduleLabel(m)}
+            </option>
           ))}
         </Select>
         <Select value={session} onChange={(e) => setSession(e.target.value)}>
@@ -426,11 +425,19 @@ const Notes: React.FC = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={12} className="py-4">Chargement...</td></tr>
+              <tr>
+                <td colSpan={12} className="py-4">
+                  Chargement...
+                </td>
+              </tr>
             ) : notes.length === 0 ? (
-              <tr><td colSpan={12} className="py-4 text-gray-500">Aucune note trouvée</td></tr>
+              <tr>
+                <td colSpan={12} className="py-4 text-gray-500">
+                  Aucune note trouvée
+                </td>
+              </tr>
             ) : (
-              notes.map((n: NoteItem) => (
+              notes.map((n) => (
                 <tr key={n.id} className="hover:bg-gray-50">
                   <td className="px-2 py-1">{n.student?.nom} {n.student?.prenom}</td>
                   <td className="px-2 py-1">{n.student?.matricule ?? "-"}</td>
@@ -468,7 +475,9 @@ const Notes: React.FC = () => {
               <Select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>
                 <option value="">-- Choisir un étudiant --</option>
                 {students.map((s: Student) => (
-                  <option key={s.id} value={s.id}>{s.nom} {s.prenom} ({s.matricule ?? "—"})</option>
+                  <option key={s.id} value={s.id}>
+                    {s.nom} {s.prenom} ({s.matricule ?? "—"})
+                  </option>
                 ))}
               </Select>
 
@@ -484,7 +493,9 @@ const Notes: React.FC = () => {
                 }
               }}>
                 <option value="">-- Choisir un module --</option>
-                {modules.map((m: ModuleType) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
+                {modules.map((m: ModuleType) => (
+                  <option key={m.id} value={m.id}>{moduleLabel(m)}</option>
+                ))}
               </Select>
 
               <div className="grid grid-cols-2 gap-2">
