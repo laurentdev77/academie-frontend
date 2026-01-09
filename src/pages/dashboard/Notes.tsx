@@ -4,17 +4,43 @@ import api from "@/services/api";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { LucideEdit, LucideTrash2, LucideRefreshCw, LucideDownload } from "lucide-react";
+// Composants UI simples
+const Button = ({ children, onClick, variant }: { children: React.ReactNode; onClick?: () => void; variant?: "outline" | "ghost" }) => (
+  <button
+    onClick={onClick}
+    className={`px-3 py-1 rounded ${
+      variant === "outline"
+        ? "border border-gray-400 text-gray-700 hover:bg-gray-100"
+        : variant === "ghost"
+        ? "text-gray-700 hover:bg-gray-100"
+        : "bg-blue-600 text-white hover:bg-blue-700"
+    }`}
+  >
+    {children}
+  </button>
+);
 
-// -----------------------------
-// Types
-// -----------------------------
+const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+  <input {...props} className="w-full border rounded p-2" />
+);
+
+const Modal = ({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title?: string }) => (
+  <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+    <div className="bg-white p-6 rounded w-full max-w-md relative">
+      <h2 className="text-lg font-bold mb-4">{title}</h2>
+      {children}
+      <button onClick={onClose} className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 font-bold">
+        ✕
+      </button>
+    </div>
+  </div>
+);
+
+// TYPES
 interface Filiere { id: number; nom: string; }
 interface Promotion { id: number; nom?: string; annee?: number; filiereId?: number | null; filiere?: Filiere | null; }
-interface ModuleType { id: string; nom?: string; title?: string; code?: string; promotionId?: number | null; promotion?: Promotion | null; teacherId?: string; }
-interface Student { id: string; matricule?: string; nom: string; prenom?: string; promotionId?: number | null; promotion?: Promotion | null; }
+interface ModuleType { id: string; title?: string; code?: string; promotionId?: number | null; promotion?: Promotion | null; teacherId?: string; }
+interface Student { id: string; nom?: string; prenom?: string; matricule?: string; promotionId?: number | null; promotion?: Promotion | null; }
 interface NoteItem {
   id: string;
   studentId: string;
@@ -29,26 +55,12 @@ interface NoteItem {
   module?: ModuleType | null;
 }
 
-// -----------------------------
-// Custom Select
-// -----------------------------
-const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) => (
-  <select {...props} className="border rounded px-2 py-2 w-full">
-    {props.children}
-  </select>
-);
-
-// -----------------------------
-// Composant Notes
-// -----------------------------
+// COMPONENT
 const Notes: React.FC = () => {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isAdmin = ["admin", "secretary", "DE"].includes(user?.role?.name);
   const isTeacher = user?.role?.name === "teacher";
 
-  // -----------------------------
-  // États
-  // -----------------------------
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [modules, setModules] = useState<ModuleType[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -62,7 +74,7 @@ const Notes: React.FC = () => {
   const [session, setSession] = useState<string | "all">("all");
   const [semester, setSemester] = useState<string | "">("");
 
-  const [showForm, setShowForm] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
   const [form, setForm] = useState({
     studentId: "",
@@ -78,23 +90,19 @@ const Notes: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // -----------------------------
-  // INITIAL LOAD
+  // FETCH STATIC DATA
   // -----------------------------
   useEffect(() => {
     if (!isAdmin && !isTeacher) return;
     fetchAllStatic();
-    fetchNotes();
   }, []);
 
   useEffect(() => {
     if (!isAdmin && !isTeacher) return;
     const t = setTimeout(() => fetchNotes(), 300);
     return () => clearTimeout(t);
-  }, [search, promotionId, moduleId, session, semester]);
+  }, [search, promotionId, moduleId, session, semester, modules]);
 
-  // -----------------------------
-  // FETCH STATIC DATA
-  // -----------------------------
   const fetchAllStatic = async () => {
     try {
       if (isAdmin) {
@@ -104,20 +112,27 @@ const Notes: React.FC = () => {
           api.get("/promotions"),
           api.get("/filieres"),
         ]);
-        setModules(Array.isArray(mRes.data) ? mRes.data : []);
-        setStudents(Array.isArray(sRes.data) ? sRes.data : []);
-        setPromotions(Array.isArray(pRes.data) ? pRes.data : []);
-        setFilieres(Array.isArray(fRes.data) ? fRes.data : []);
+        setModules(Array.isArray(mRes.data?.data || mRes.data) ? mRes.data?.data || mRes.data : []);
+        setStudents(Array.isArray(sRes.data?.data || sRes.data) ? sRes.data?.data || sRes.data : []);
+        setPromotions(Array.isArray(pRes.data?.data || pRes.data) ? pRes.data?.data || pRes.data : []);
+        setFilieres(Array.isArray(fRes.data?.data || fRes.data) ? fRes.data?.data || fRes.data : []);
       } else if (isTeacher) {
-        // fetch teacher modules
-        try {
-          const mRes = await api.get("/notes/my");
-          const modulesData: ModuleType[] = Array.isArray(mRes.data?.data) ? mRes.data.data.map((n: NoteItem) => n.module).filter(Boolean) : [];
-          setModules(modulesData);
-        } catch (err: any) {
-          console.error("fetch teacher modules error:", err);
-          setErrorMsg(err?.response?.data?.message || "Impossible de charger les modules du professeur");
+        // Modules du teacher
+        const mRes = await api.get("/modules/my");
+        const modulesData: ModuleType[] = Array.isArray(mRes.data?.data) ? mRes.data.data : [];
+        setModules(modulesData);
+
+        // Étudiants par module
+        let allStudents: Student[] = [];
+        for (const m of modulesData) {
+          try {
+            const sRes = await api.get(`/students/by-module/${m.id}`);
+            if (Array.isArray(sRes.data)) allStudents.push(...sRes.data);
+          } catch (err) {
+            console.error("fetch students for module error:", err);
+          }
         }
+        setStudents(allStudents);
       }
     } catch (err) {
       console.error("fetchAllStatic error:", err);
@@ -132,13 +147,18 @@ const Notes: React.FC = () => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      let res;
       if (isTeacher) {
-        if (moduleId !== "all") {
-          res = await api.get(`/notes/module/${moduleId}`);
-        } else {
-          res = await api.get("/notes/my");
+        let notesArr: NoteItem[] = [];
+        for (const m of modules) {
+          if (moduleId !== "all" && m.id !== moduleId) continue;
+          try {
+            const r = await api.get(`/notes/module/${m.id}`);
+            if (Array.isArray(r.data?.data)) notesArr.push(...r.data.data);
+          } catch (err) {
+            console.error(`fetch notes for module ${m.id} error:`, err);
+          }
         }
+        setNotes(notesArr);
       } else {
         const params: any = {};
         if (search) params.search = search;
@@ -146,46 +166,59 @@ const Notes: React.FC = () => {
         if (moduleId !== "all") params.moduleId = moduleId;
         if (session !== "all") params.session = session;
         if (semester) params.semester = semester;
-
-        res = await api.get("/notes", { params });
+        const res = await api.get("/notes", { params });
+        setNotes(Array.isArray(res.data?.data) ? res.data.data : []);
       }
-
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
-      setNotes(data);
     } catch (err: any) {
       console.error("fetchNotes error:", err);
-      if (err?.response?.status === 403) setErrorMsg("Accès refusé : vous n'êtes pas autorisé à voir ces notes");
-      else setErrorMsg(err?.response?.data?.message || "Erreur lors du chargement des notes");
-      setNotes([]);
+      setErrorMsg(err?.response?.data?.message || "Erreur lors du chargement des notes");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchStudentsForModule = async (moduleId: string) => {
+    try {
+      const res = await api.get(`/students/by-module/${moduleId}`);
+      return Array.isArray(res.data) ? res.data : [];
+    } catch (err) {
+      console.error("fetchStudentsForModule error:", err);
+      return [];
     }
   };
 
   // -----------------------------
   // FORM HANDLERS
   // -----------------------------
-  const openAddForm = () => {
-    if (!modules.length || !students.length) {
-      setErrorMsg("Aucun module ou étudiant disponible pour ajouter une note.");
-      return;
-    }
+  const openAddForm = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!modules.length) return setErrorMsg("Aucun module disponible.");
+    const firstModuleId = modules[0].id;
+    const studentsForModule = await fetchStudentsForModule(firstModuleId);
+    if (!studentsForModule.length) return setErrorMsg("Aucun étudiant disponible pour ce module.");
+
+    setStudents(studentsForModule);
     setEditingNote(null);
     setForm({
-      studentId: students[0]?.id ?? "",
-      moduleId: modules[0]?.id ?? "",
+      studentId: studentsForModule[0].id,
+      moduleId: firstModuleId,
       ce: "",
       fe: "",
       session: "Normale",
       semester: "1",
       appreciation: "",
     });
-    setShowForm(true);
+    setShowModal(true);
   };
 
-  const openEditForm = (n: NoteItem) => {
-    if (!n) return;
+  const openEditForm = async (n: NoteItem) => {
     setEditingNote(n);
+    if (!students.find((s) => s.id === n.studentId)) {
+      const fetchedStudents = await fetchStudentsForModule(n.moduleId);
+      setStudents(fetchedStudents);
+    }
     setForm({
       studentId: n.studentId,
       moduleId: n.moduleId,
@@ -195,7 +228,7 @@ const Notes: React.FC = () => {
       semester: n.semester ? String(n.semester) : "1",
       appreciation: n.appreciation ?? "",
     });
-    setShowForm(true);
+    setShowModal(true);
   };
 
   const handleSubmit = async () => {
@@ -212,14 +245,13 @@ const Notes: React.FC = () => {
     };
     try {
       if (editingNote) {
-        if (isTeacher) await api.put(`/notes/module/${editingNote.moduleId}/${editingNote.id}`, payload);
-        else await api.put(`/notes/${editingNote.id}`, payload);
+        await api.put(`/notes/module/${payload.moduleId}/${editingNote.id}`, payload);
       } else {
-        if (isTeacher) await api.post(`/notes/module/${payload.moduleId}`, payload);
-        else await api.post("/notes", payload);
+        await api.post(`/notes/module/${payload.moduleId}/add`, payload);
       }
-      setShowForm(false);
+      setShowModal(false);
       fetchNotes();
+      setSuccessMsg("Note enregistrée avec succès");
     } catch (err: any) {
       console.error("submit note error:", err);
       setErrorMsg(err?.response?.data?.message || "Erreur lors de l'enregistrement de la note");
@@ -229,10 +261,9 @@ const Notes: React.FC = () => {
   const deleteNote = async (id: string, moduleId?: string) => {
     if (!window.confirm("Supprimer cette note ?")) return;
     try {
-      if (isTeacher && moduleId) await api.delete(`/notes/module/${moduleId}/${id}`);
-      else await api.delete(`/notes/${id}`);
-      setSuccessMsg("Note supprimée");
+      if (moduleId) await api.delete(`/notes/module/${moduleId}/${id}`);
       fetchNotes();
+      setSuccessMsg("Note supprimée");
     } catch (err) {
       console.error("delete note error:", err);
       setErrorMsg("Erreur lors de la suppression de la note");
@@ -243,7 +274,6 @@ const Notes: React.FC = () => {
   // EXPORT EXCEL
   // -----------------------------
   const exportToExcel = () => {
-    if (!Array.isArray(notes) || notes.length === 0) return;
     const data = notes.map((n) => {
       const stud = n.student;
       const mod = n.module;
@@ -254,7 +284,7 @@ const Notes: React.FC = () => {
         Matricule: stud?.matricule ?? "",
         Filière: filiere?.nom ?? "-",
         Promotion: promotion?.nom ?? "-",
-        Module: mod?.nom ?? mod?.title ?? mod?.code ?? mod?.id,
+        Module: mod?.title ?? mod?.code ?? "-",
         CE: n.ce ?? "",
         FE: n.fe ?? "",
         Score: n.score ?? "",
@@ -270,7 +300,7 @@ const Notes: React.FC = () => {
     saveAs(new Blob([wbout], { type: "application/octet-stream" }), `notes_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const moduleLabel = (m?: ModuleType | null) => (m ? m.nom ?? m.title ?? m.code ?? m.id : "-");
+  const moduleLabel = (m?: ModuleType | null) => (m ? m.title ?? m.code ?? "-" : "-");
 
   // -----------------------------
   // RENDER
@@ -286,16 +316,12 @@ const Notes: React.FC = () => {
   return (
     <div className="p-6 space-y-4">
       {/* HEADER */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-2">
         <h2 className="text-2xl font-bold">Notes des Élèves Officiers</h2>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={openAddForm}>Ajouter une note</Button>
-          <Button onClick={fetchNotes} variant="outline">
-            <LucideRefreshCw className="w-4 h-4 mr-1" /> Actualiser
-          </Button>
-          <Button onClick={exportToExcel} variant="ghost">
-            <LucideDownload className="w-4 h-4 mr-1" /> Exporter Excel
-          </Button>
+          <Button onClick={fetchNotes} variant="outline">Actualiser</Button>
+          <Button onClick={exportToExcel} variant="ghost">Exporter Excel</Button>
         </div>
       </div>
 
@@ -308,18 +334,18 @@ const Notes: React.FC = () => {
         <table className="min-w-full text-sm text-center border-collapse">
           <thead className="bg-gray-100">
             <tr>
-              <th>Elève</th>
-              <th>Matricule</th>
-              <th>Filière</th>
-              <th>Promotion</th>
-              <th>Module</th>
-              <th>CE</th>
-              <th>FE</th>
-              <th>Score</th>
-              <th>Appréciation</th>
-              <th>Session</th>
-              <th>Semestre</th>
-              <th>Actions</th>
+              <th className="px-2 py-1 border">Elève</th>
+              <th className="px-2 py-1 border">Matricule</th>
+              <th className="px-2 py-1 border">Filière</th>
+              <th className="px-2 py-1 border">Promotion</th>
+              <th className="px-2 py-1 border">Module</th>
+              <th className="px-2 py-1 border">CE</th>
+              <th className="px-2 py-1 border">FE</th>
+              <th className="px-2 py-1 border">Score</th>
+              <th className="px-2 py-1 border">Appréciation</th>
+              <th className="px-2 py-1 border">Session</th>
+              <th className="px-2 py-1 border">Semestre</th>
+              <th className="px-2 py-1 border">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -330,20 +356,20 @@ const Notes: React.FC = () => {
             ) : (
               notes.map((n) => (
                 <tr key={n.id} className="hover:bg-gray-50">
-                  <td>{n.student?.nom} {n.student?.prenom}</td>
-                  <td>{n.student?.matricule ?? "-"}</td>
-                  <td>{n.student?.promotion?.filiere?.nom ?? "-"}</td>
-                  <td>{n.student?.promotion?.nom ?? "-"}</td>
-                  <td>{moduleLabel(n.module)}</td>
-                  <td>{n.ce ?? "-"}</td>
-                  <td>{n.fe ?? "-"}</td>
-                  <td>{n.score ?? "-"}</td>
-                  <td>{n.appreciation ?? "-"}</td>
-                  <td>{n.session ?? "-"}</td>
-                  <td>{n.semester ?? "-"}</td>
-                  <td className="flex gap-2 justify-center">
-                    <button onClick={() => openEditForm(n)} className="p-2 border rounded hover:bg-gray-100"><LucideEdit className="w-4 h-4" /></button>
-                    <button onClick={() => deleteNote(n.id, n.moduleId)} className="p-2 border rounded bg-red-500 text-white hover:opacity-90"><LucideTrash2 className="w-4 h-4" /></button>
+                  <td className="px-2 py-1">{n.student?.nom} {n.student?.prenom}</td>
+                  <td className="px-2 py-1">{n.student?.matricule ?? "-"}</td>
+                  <td className="px-2 py-1">{n.student?.promotion?.filiere?.nom ?? "-"}</td>
+                  <td className="px-2 py-1">{n.student?.promotion?.nom ?? "-"}</td>
+                  <td className="px-2 py-1">{moduleLabel(n.module)}</td>
+                  <td className="px-2 py-1">{n.ce ?? "-"}</td>
+                  <td className="px-2 py-1">{n.fe ?? "-"}</td>
+                  <td className="px-2 py-1">{n.score ?? "-"}</td>
+                  <td className="px-2 py-1">{n.appreciation ?? "-"}</td>
+                  <td className="px-2 py-1">{n.session ?? "-"}</td>
+                  <td className="px-2 py-1">{n.semester ?? "-"}</td>
+                  <td className="px-2 py-1 flex gap-2 justify-center">
+                    <button onClick={() => openEditForm(n)} className="p-2 border rounded hover:bg-gray-100">✏️</button>
+                    <button onClick={() => deleteNote(n.id, n.moduleId)} className="p-2 border rounded bg-red-500 text-white hover:opacity-90">🗑️</button>
                   </td>
                 </tr>
               ))
@@ -351,6 +377,66 @@ const Notes: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {/* MODAL FORM */}
+      {showModal && (
+        <Modal onClose={() => setShowModal(false)} title={editingNote ? "Modifier Note" : "Ajouter Note"}>
+          <div className="space-y-2">
+            <label>Module</label>
+            <select
+              value={form.moduleId}
+              onChange={async (e) => {
+                const mId = e.target.value;
+                setForm({ ...form, moduleId: mId });
+                const studs = await fetchStudentsForModule(mId);
+                setStudents(studs);
+                setForm((prev) => ({ ...prev, studentId: studs[0]?.id ?? "" }));
+              }}
+              className="w-full border rounded p-2"
+            >
+              {modules.map((m) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
+            </select>
+
+            <label>Étudiant</label>
+            <select
+              value={form.studentId}
+              onChange={(e) => setForm({ ...form, studentId: e.target.value })}
+              className="w-full border rounded p-2"
+            >
+              {students.map((s) => <option key={s.id} value={s.id}>{s.nom} {s.prenom}</option>)}
+            </select>
+
+            <label>CE</label>
+            <Input type="number" value={form.ce} onChange={(e) => setForm({ ...form, ce: e.target.value })} />
+
+            <label>FE</label>
+            <Input type="number" value={form.fe} onChange={(e) => setForm({ ...form, fe: e.target.value })} />
+
+            <label>Session</label>
+            <select value={form.session} onChange={(e) => setForm({ ...form, session: e.target.value })} className="w-full border rounded p-2">
+              <option value="Normale">Normale</option>
+              <option value="Rattrapage">Rattrapage</option>
+            </select>
+
+            <label>Semestre</label>
+            <select value={form.semester} onChange={(e) => setForm({ ...form, semester: e.target.value })} className="w-full border rounded p-2">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+
+            <label>Appréciation</label>
+            <Input type="text" value={form.appreciation} onChange={(e) => setForm({ ...form, appreciation: e.target.value })} />
+
+            {errorMsg && <p className="text-red-600">{errorMsg}</p>}
+            {successMsg && <p className="text-green-600">{successMsg}</p>}
+
+            <div className="flex justify-end gap-2 mt-2">
+              <Button onClick={() => setShowModal(false)} variant="outline">Annuler</Button>
+              <Button onClick={handleSubmit}>{editingNote ? "Modifier" : "Ajouter"}</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 };
