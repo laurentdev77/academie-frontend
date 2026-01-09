@@ -33,9 +33,7 @@ interface NoteItem {
 // Custom Select
 // -----------------------------
 const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement>> = (props) => (
-  <select {...props} className="border rounded px-2 py-2 w-full">
-    {props.children}
-  </select>
+  <select {...props} className="border rounded px-2 py-2 w-full">{props.children}</select>
 );
 
 // -----------------------------
@@ -46,9 +44,6 @@ const Notes: React.FC = () => {
   const isAdmin = ["admin", "secretary", "DE"].includes(user?.role?.name);
   const isTeacher = user?.role?.name === "teacher";
 
-  // -----------------------------
-  // États
-  // -----------------------------
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [modules, setModules] = useState<ModuleType[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -82,7 +77,7 @@ const Notes: React.FC = () => {
   // -----------------------------
   useEffect(() => {
     if (!isAdmin && !isTeacher) return;
-    fetchAllStatic();
+    fetchStaticData();
     fetchNotes();
   }, []);
 
@@ -95,7 +90,7 @@ const Notes: React.FC = () => {
   // -----------------------------
   // FETCH STATIC DATA
   // -----------------------------
-  const fetchAllStatic = async () => {
+  const fetchStaticData = async () => {
     try {
       if (isAdmin) {
         const [mRes, sRes, pRes, fRes] = await Promise.all([
@@ -104,28 +99,24 @@ const Notes: React.FC = () => {
           api.get("/promotions"),
           api.get("/filieres"),
         ]);
-        setModules(Array.isArray(mRes.data) ? mRes.data : []);
-        setStudents(Array.isArray(sRes.data) ? sRes.data : []);
-        setPromotions(Array.isArray(pRes.data) ? pRes.data : []);
-        setFilieres(Array.isArray(fRes.data) ? fRes.data : []);
+        setModules(mRes.data || []);
+        setStudents(sRes.data || []);
+        setPromotions(pRes.data || []);
+        setFilieres(fRes.data || []);
       } else if (isTeacher) {
-        const mRes = await api.get("/modules/my");
-        const modulesData: ModuleType[] = Array.isArray(mRes.data?.data) ? mRes.data.data : [];
-        setModules(modulesData);
+        const mRes = await api.get("/notes/my-modules"); // API dédiée teacher
+        setModules(mRes.data || []);
 
-        let allStudents: Student[] = [];
-        for (const m of modulesData) {
-          try {
-            const sRes = await api.get(`/students/by-module/${m.id}`);
-            if (Array.isArray(sRes.data)) allStudents.push(...sRes.data);
-          } catch (err) {
-            console.error("fetch students for module error:", err);
-          }
+        // Récupérer tous les étudiants des modules du teacher
+        const studentsSet = new Map<string, Student>();
+        for (const m of mRes.data) {
+          const sRes = await api.get(`/students/by-module/${m.id}`);
+          (sRes.data || []).forEach((s: Student) => studentsSet.set(s.id, s));
         }
-        setStudents(allStudents);
+        setStudents(Array.from(studentsSet.values()));
       }
     } catch (err) {
-      console.error("fetchAllStatic error:", err);
+      console.error("fetchStaticData error:", err);
       setErrorMsg("Impossible de charger les données statiques.");
     }
   };
@@ -139,11 +130,9 @@ const Notes: React.FC = () => {
     try {
       let res;
       if (isTeacher) {
-        if (moduleId !== "all") {
-          res = await api.get(`/notes/module/${moduleId}`);
-        } else {
-          res = await api.get("/notes/my");
-        }
+        res = moduleId !== "all"
+          ? await api.get(`/notes/module/${moduleId}`)
+          : await api.get("/notes/my");
       } else {
         const params: any = {};
         if (search) params.search = search;
@@ -151,12 +140,9 @@ const Notes: React.FC = () => {
         if (moduleId !== "all") params.moduleId = moduleId;
         if (session !== "all") params.session = session;
         if (semester) params.semester = semester;
-
         res = await api.get("/notes", { params });
       }
-
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
-      setNotes(data);
+      setNotes(res.data?.data || []);
     } catch (err: any) {
       console.error("fetchNotes error:", err);
       setErrorMsg(err?.response?.data?.message || "Erreur lors du chargement des notes");
@@ -166,46 +152,17 @@ const Notes: React.FC = () => {
   };
 
   // -----------------------------
-  // FETCH STUDENTS FOR MODULE
-  // -----------------------------
-  const fetchStudentsForModule = async (moduleId: string) => {
-    try {
-      const res = await api.get(`/students/by-module/${moduleId}`);
-      return Array.isArray(res.data) ? res.data : [];
-    } catch (err) {
-      console.error("fetchStudentsForModule error:", err);
-      return [];
-    }
-  };
-
-  // -----------------------------
   // FORM HANDLERS
   // -----------------------------
-  const openAddForm = async () => {
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    let availableStudents = students;
-
-    if (isTeacher && modules.length) {
-      const allStudents: Student[] = [];
-      for (const m of modules) {
-        const s = await fetchStudentsForModule(m.id);
-        allStudents.push(...s);
-      }
-      availableStudents = allStudents;
-      setStudents(availableStudents);
-    }
-
-    if (!availableStudents.length || !modules.length) {
-      setErrorMsg("Aucun étudiant ou module disponible pour ajouter une note.");
+  const openAddForm = () => {
+    if (!students.length || !modules.length) {
+      setErrorMsg("Aucun étudiant ou module disponible.");
       return;
     }
-
     setEditingNote(null);
     setForm({
-      studentId: availableStudents[0]?.id ?? "",
-      moduleId: modules[0]?.id ?? "",
+      studentId: students[0].id,
+      moduleId: modules[0].id,
       ce: "",
       fe: "",
       session: "Normale",
@@ -215,46 +172,43 @@ const Notes: React.FC = () => {
     setShowForm(true);
   };
 
-  const openEditForm = async (n: NoteItem) => {
-    setEditingNote(n);
-
-    // S'assurer que students inclut l'étudiant sélectionné
-    if (!students.find((s) => s.id === n.studentId)) {
-      const fetchedStudents = await fetchStudentsForModule(n.moduleId);
-      setStudents(fetchedStudents);
-    }
-
+  const openEditForm = (note: NoteItem) => {
+    setEditingNote(note);
     setForm({
-      studentId: n.studentId,
-      moduleId: n.moduleId,
-      ce: n.ce !== undefined && n.ce !== null ? String(n.ce) : "",
-      fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
-      session: n.session ?? "Normale",
-      semester: n.semester ? String(n.semester) : "1",
-      appreciation: n.appreciation ?? "",
+      studentId: note.studentId,
+      moduleId: note.moduleId,
+      ce: note.ce?.toString() || "",
+      fe: note.fe?.toString() || "",
+      session: note.session || "Normale",
+      semester: note.semester?.toString() || "1",
+      appreciation: note.appreciation || "",
     });
     setShowForm(true);
   };
 
   const handleSubmit = async () => {
-    setErrorMsg(null);
-    setSuccessMsg(null);
     const payload = {
       studentId: form.studentId,
       moduleId: form.moduleId,
-      ce: form.ce === "" ? 0 : parseFloat(form.ce),
-      fe: form.fe === "" ? 0 : parseFloat(form.fe),
+      ce: parseFloat(form.ce) || 0,
+      fe: parseFloat(form.fe) || 0,
       session: form.session,
       semester: parseInt(form.semester || "1", 10),
       appreciation: form.appreciation,
     };
     try {
       if (editingNote) {
-        if (isTeacher) await api.put(`/notes/module/${editingNote.moduleId}/${editingNote.id}`, payload);
-        else await api.put(`/notes/${editingNote.id}`, payload);
+        if (isTeacher)
+          await api.put(`/notes/module/${editingNote.moduleId}/${editingNote.id}`, payload);
+        else
+          await api.put(`/notes/${editingNote.id}`, payload);
+        setSuccessMsg("Note mise à jour");
       } else {
-        if (isTeacher) await api.post(`/notes/module/${payload.moduleId}/add`, payload);
-        else await api.post("/notes", payload);
+        if (isTeacher)
+          await api.post(`/notes/module/${payload.moduleId}`, payload);
+        else
+          await api.post("/notes", payload);
+        setSuccessMsg("Note ajoutée");
       }
       setShowForm(false);
       fetchNotes();
@@ -267,8 +221,10 @@ const Notes: React.FC = () => {
   const deleteNote = async (id: string, moduleId?: string) => {
     if (!window.confirm("Supprimer cette note ?")) return;
     try {
-      if (isTeacher && moduleId) await api.delete(`/notes/module/${moduleId}/${id}`);
-      else await api.delete(`/notes/${id}`);
+      if (isTeacher && moduleId)
+        await api.delete(`/notes/module/${moduleId}/${id}`);
+      else
+        await api.delete(`/notes/${id}`);
       setSuccessMsg("Note supprimée");
       fetchNotes();
     } catch (err) {
@@ -281,25 +237,19 @@ const Notes: React.FC = () => {
   // EXPORT EXCEL
   // -----------------------------
   const exportToExcel = () => {
-    const data = notes.map((n) => {
-      const stud = n.student;
-      const mod = n.module;
-      const promotion = stud?.promotion ?? promotions.find((p) => p.id === stud?.promotionId);
-      const filiere = filieres.find((f) => f.id === promotion?.filiereId);
-      return {
-        Étudiant: `${stud?.nom ?? ""} ${stud?.prenom ?? ""}`.trim(),
-        Matricule: stud?.matricule ?? "",
-        Filière: filiere?.nom ?? "-",
-        Promotion: promotion?.nom ?? "-",
-        Module: mod?.nom ?? mod?.title ?? mod?.code ?? mod?.id,
-        CE: n.ce ?? "",
-        FE: n.fe ?? "",
-        Score: n.score ?? "",
-        Session: n.session ?? "",
-        Semestre: n.semester ?? "",
-        Appréciation: n.appreciation ?? "",
-      };
-    });
+    const data = notes.map(n => ({
+      Étudiant: `${n.student?.nom ?? ""} ${n.student?.prenom ?? ""}`.trim(),
+      Matricule: n.student?.matricule ?? "",
+      Filière: n.student?.promotion?.filiere?.nom ?? "-",
+      Promotion: n.student?.promotion?.nom ?? "-",
+      Module: n.module?.title ?? n.module?.nom ?? n.module?.code ?? n.module?.id,
+      CE: n.ce ?? "",
+      FE: n.fe ?? "",
+      Score: n.score ?? "",
+      Session: n.session ?? "",
+      Semestre: n.semester ?? "",
+      Appréciation: n.appreciation ?? "",
+    }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Notes");
@@ -314,8 +264,8 @@ const Notes: React.FC = () => {
   // -----------------------------
   if (!isAdmin && !isTeacher) {
     return (
-      <div className="p-6">
-        <p className="text-red-600">Accès réservé aux enseignants et à l’administration</p>
+      <div className="p-6 text-red-600">
+        Accès réservé aux enseignants et à l’administration
       </div>
     );
   }
@@ -345,13 +295,11 @@ const Notes: React.FC = () => {
         <Input placeholder="Recherche..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={promotionId} onChange={(e) => setPromotionId(e.target.value)}>
           <option value="all">Toutes promotions</option>
-          {promotions.map((p) => (
-            <option key={p.id} value={String(p.id)}>{p.nom ?? `Promotion ${p.id}`}</option>
-          ))}
+          {promotions.map(p => <option key={p.id} value={String(p.id)}>{p.nom ?? `Promotion ${p.id}`}</option>)}
         </Select>
         <Select value={moduleId} onChange={(e) => setModuleId(e.target.value)}>
           <option value="all">Tous modules</option>
-          {modules.map((m) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
+          {modules.map(m => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
         </Select>
         <Select value={session} onChange={(e) => setSession(e.target.value)}>
           <option value="all">Toutes sessions</option>
@@ -389,31 +337,29 @@ const Notes: React.FC = () => {
               <tr><td colSpan={12} className="py-4">Chargement...</td></tr>
             ) : notes.length === 0 ? (
               <tr><td colSpan={12} className="py-4 text-gray-500">Aucune note trouvée</td></tr>
-            ) : (
-              notes.map((n) => (
-                <tr key={n.id} className="hover:bg-gray-50">
-                  <td className="px-2 py-1">{n.student?.nom} {n.student?.prenom}</td>
-                  <td className="px-2 py-1">{n.student?.matricule ?? "-"}</td>
-                  <td className="px-2 py-1">{n.student?.promotion?.filiere?.nom ?? "-"}</td>
-                  <td className="px-2 py-1">{n.student?.promotion?.nom ?? "-"}</td>
-                  <td className="px-2 py-1">{moduleLabel(n.module)}</td>
-                  <td className="px-2 py-1">{n.ce ?? "-"}</td>
-                  <td className="px-2 py-1">{n.fe ?? "-"}</td>
-                  <td className="px-2 py-1">{n.score ?? "-"}</td>
-                  <td className="px-2 py-1">{n.appreciation ?? "-"}</td>
-                  <td className="px-2 py-1">{n.session ?? "-"}</td>
-                  <td className="px-2 py-1">{n.semester ?? "-"}</td>
-                  <td className="px-2 py-1 flex gap-2 justify-center">
-                    <button onClick={() => openEditForm(n)} className="p-2 border rounded hover:bg-gray-100" title="Modifier">
-                      <LucideEdit className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => deleteNote(n.id, n.moduleId)} className="p-2 border rounded bg-red-500 text-white hover:opacity-90" title="Supprimer">
-                      <LucideTrash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
+            ) : notes.map(n => (
+              <tr key={n.id} className="hover:bg-gray-50">
+                <td className="px-2 py-1">{n.student?.nom} {n.student?.prenom}</td>
+                <td className="px-2 py-1">{n.student?.matricule ?? "-"}</td>
+                <td className="px-2 py-1">{n.student?.promotion?.filiere?.nom ?? "-"}</td>
+                <td className="px-2 py-1">{n.student?.promotion?.nom ?? "-"}</td>
+                <td className="px-2 py-1">{moduleLabel(n.module)}</td>
+                <td className="px-2 py-1">{n.ce ?? "-"}</td>
+                <td className="px-2 py-1">{n.fe ?? "-"}</td>
+                <td className="px-2 py-1">{n.score ?? "-"}</td>
+                <td className="px-2 py-1">{n.appreciation ?? "-"}</td>
+                <td className="px-2 py-1">{n.session ?? "-"}</td>
+                <td className="px-2 py-1">{n.semester ?? "-"}</td>
+                <td className="px-2 py-1 flex gap-2 justify-center">
+                  <button onClick={() => openEditForm(n)} className="p-2 border rounded hover:bg-gray-100" title="Modifier">
+                    <LucideEdit className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => deleteNote(n.id, n.moduleId)} className="p-2 border rounded bg-red-500 text-white hover:opacity-90" title="Supprimer">
+                    <LucideTrash2 className="w-4 h-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -424,33 +370,24 @@ const Notes: React.FC = () => {
           <div className="bg-white rounded p-4 w-full max-w-md space-y-4">
             <h3 className="text-lg font-bold">{editingNote ? "Modifier la note" : "Ajouter une note"}</h3>
             <div className="space-y-2">
-              <Select value={form.moduleId} onChange={async (e) => {
-                setForm({ ...form, moduleId: e.target.value });
-                const s = await fetchStudentsForModule(e.target.value);
-                setStudents(s);
-                if (s.length) setForm((f) => ({ ...f, studentId: s[0].id }));
-              }}>
-                {modules.map((m) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
+              <Select value={form.moduleId} onChange={(e) => setForm({...form, moduleId: e.target.value})}>
+                {modules.map(m => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
               </Select>
-
-              <Select value={form.studentId} onChange={(e) => setForm({ ...form, studentId: e.target.value })}>
-                {students.map((s) => <option key={s.id} value={s.id}>{s.nom} {s.prenom}</option>)}
+              <Select value={form.studentId} onChange={(e) => setForm({...form, studentId: e.target.value})}>
+                {students.map(s => <option key={s.id} value={s.id}>{s.nom} {s.prenom}</option>)}
               </Select>
-
-              <Input type="number" placeholder="CE" value={form.ce} onChange={(e) => setForm({ ...form, ce: e.target.value })} />
-              <Input type="number" placeholder="FE" value={form.fe} onChange={(e) => setForm({ ...form, fe: e.target.value })} />
-              <Input placeholder="Appréciation" value={form.appreciation} onChange={(e) => setForm({ ...form, appreciation: e.target.value })} />
-
-              <Select value={form.session} onChange={(e) => setForm({ ...form, session: e.target.value })}>
+              <Input type="number" placeholder="CE" value={form.ce} onChange={(e) => setForm({...form, ce: e.target.value})} />
+              <Input type="number" placeholder="FE" value={form.fe} onChange={(e) => setForm({...form, fe: e.target.value})} />
+              <Input placeholder="Appréciation" value={form.appreciation} onChange={(e) => setForm({...form, appreciation: e.target.value})} />
+              <Select value={form.session} onChange={(e) => setForm({...form, session: e.target.value})}>
                 <option value="Normale">Normale</option>
                 <option value="Rattrapage">Rattrapage</option>
               </Select>
-              <Select value={form.semester} onChange={(e) => setForm({ ...form, semester: e.target.value })}>
+              <Select value={form.semester} onChange={(e) => setForm({...form, semester: e.target.value})}>
                 <option value="1">Semestre 1</option>
                 <option value="2">Semestre 2</option>
               </Select>
             </div>
-
             <div className="flex justify-end gap-2">
               <Button onClick={() => setShowForm(false)} variant="outline">Annuler</Button>
               <Button onClick={handleSubmit}>{editingNote ? "Modifier" : "Ajouter"}</Button>
