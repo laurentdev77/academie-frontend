@@ -1,345 +1,444 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { jsPDF } from "jspdf";
+// src/pages/dashboard/Notes.tsx
+import React, { useEffect, useState } from "react";
+import api from "@/services/api";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-import { useReactToPrint } from "react-to-print";
-import { Button } from "@/components/ui/button";
-import api from "@/services/api";
 
-/* -------------------------
-   Types
-------------------------- */
-interface ModuleShape {
-  id: string;
-  title: string;
-  code: string;
-  credits: number;
-  semester: number;
-}
+// Composants UI simples
+const Button = ({ children, onClick, variant }: { children: React.ReactNode; onClick?: () => void; variant?: "outline" | "ghost" }) => (
+  <button
+    onClick={onClick}
+    className={`px-3 py-1 rounded ${
+      variant === "outline"
+        ? "border border-gray-400 text-gray-700 hover:bg-gray-100"
+        : variant === "ghost"
+        ? "text-gray-700 hover:bg-gray-100"
+        : "bg-blue-600 text-white hover:bg-blue-700"
+    }`}
+  >
+    {children}
+  </button>
+);
 
-interface StudentShape {
-  id: string;
-  nom: string;
-  prenom: string;
-  matricule: string;
-}
+const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+  <input {...props} className="w-full border rounded p-2" />
+);
 
-interface NoteShape {
+const Modal = ({ children, onClose, title }: { children: React.ReactNode; onClose: () => void; title?: string }) => (
+  <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50">
+    <div className="bg-white p-6 rounded w-full max-w-md relative">
+      <h2 className="text-lg font-bold mb-4">{title}</h2>
+      {children}
+      <button onClick={onClose} className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 font-bold">
+        ✕
+      </button>
+    </div>
+  </div>
+);
+
+// TYPES
+interface Filiere { id: number; nom: string; }
+interface Promotion { id: number; nom?: string; annee?: number; filiereId?: number | null; filiere?: Filiere | null; }
+interface ModuleType { id: string; title?: string; code?: string; promotionId?: number | null; promotion?: Promotion | null; teacherId?: string; }
+interface Student { id: string; nom?: string; prenom?: string; matricule?: string; promotionId?: number | null; promotion?: Promotion | null; }
+interface NoteItem {
   id: string;
-  ce: number;
-  fe: number;
-  score: number;
-  appreciation?: string;
+  studentId: string;
+  moduleId: string;
+  ce?: number | null;
+  fe?: number | null;
+  score?: number | null;
   session?: string;
   semester?: number;
-  module?: ModuleShape;
-  student?: StudentShape;
+  appreciation?: string | null;
+  student?: Student | null;
+  module?: ModuleType | null;
 }
 
-/* -------------------------
-   Helpers
-------------------------- */
-const toNumber = (v: any) => (isNaN(Number(v)) ? 0 : Number(v));
-const format = (v: any) =>
-  v !== null && v !== undefined ? Number(v).toFixed(2) : "-";
+// COMPONENT
+const Notes: React.FC = () => {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const isAdmin = ["admin", "secretary", "DE"].includes(user?.role?.name);
+  const isTeacher = user?.role?.name === "teacher";
 
-const computeAverage = (notes: NoteShape[]): number => {
-  let totalWeighted = 0;
-  let totalCredits = 0;
+  const [notes, setNotes] = useState<NoteItem[]>([]);
+  const [modules, setModules] = useState<ModuleType[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [filieres, setFilieres] = useState<Filiere[]>([]);
 
-  for (const n of notes) {
-    const credits = n.module?.credits ?? 0;
-    totalWeighted += toNumber(n.score) * credits;
-    totalCredits += credits;
-  }
-
-  return totalCredits > 0
-    ? parseFloat((totalWeighted / totalCredits).toFixed(2))
-    : 0;
-};
-
-/* -------------------------
-   Component
-------------------------- */
-const NotesEtudiant: React.FC = () => {
-  const [notes, setNotes] = useState<NoteShape[]>([]);
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [promotionId, setPromotionId] = useState<string | "all">("all");
+  const [moduleId, setModuleId] = useState<string | "all">("all");
+  const [session, setSession] = useState<string | "all">("all");
+  const [semester, setSemester] = useState<string | "">("");
 
-  // Détection automatique du semestre
-  const currentMonth = new Date().getMonth() + 1;
-  const defaultSemester: "S1" | "S2" = currentMonth <= 6 ? "S1" : "S2";
-  const [viewMode, setViewMode] = useState<"S1" | "S2" | "AN">(defaultSemester);
-
-  const printRef = useRef<HTMLDivElement | null>(null);
-
-  /* -------------------------
-     Impression
-  ------------------------- */
-  const handlePrint = useReactToPrint({
-    documentTitle: "Mes Notes",
-    contentRef: printRef,
+  const [showModal, setShowModal] = useState(false);
+  const [editingNote, setEditingNote] = useState<NoteItem | null>(null);
+  const [form, setForm] = useState({
+    studentId: "",
+    moduleId: "",
+    ce: "",
+    fe: "",
+    session: "Normale",
+    semester: "1",
+    appreciation: "",
   });
 
-  /* -------------------------
-     Fetch notes
-  ------------------------- */
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // -----------------------------
+  // FETCH STATIC DATA
+  // -----------------------------
   useEffect(() => {
-    fetchNotes();
+    if (!isAdmin && !isTeacher) return;
+    fetchAllStatic();
   }, []);
 
+  useEffect(() => {
+    if (!isAdmin && !isTeacher) return;
+    const t = setTimeout(() => fetchNotes(), 300);
+    return () => clearTimeout(t);
+  }, [search, promotionId, moduleId, session, semester, modules]);
+
+  const fetchAllStatic = async () => {
+    try {
+      if (isAdmin) {
+        const [mRes, sRes, pRes, fRes] = await Promise.all([
+          api.get("/modules"),
+          api.get("/students"),
+          api.get("/promotions"),
+          api.get("/filieres"),
+        ]);
+        setModules(Array.isArray(mRes.data?.data || mRes.data) ? mRes.data?.data || mRes.data : []);
+        setStudents(Array.isArray(sRes.data?.data || sRes.data) ? sRes.data?.data || sRes.data : []);
+        setPromotions(Array.isArray(pRes.data?.data || pRes.data) ? pRes.data?.data || pRes.data : []);
+        setFilieres(Array.isArray(fRes.data?.data || fRes.data) ? fRes.data?.data || fRes.data : []);
+      } else if (isTeacher) {
+        // Modules du teacher
+        const mRes = await api.get("/modules/my");
+        const modulesData: ModuleType[] = Array.isArray(mRes.data?.data) ? mRes.data.data : [];
+        setModules(modulesData);
+
+        // Étudiants par module
+        let allStudents: Student[] = [];
+        for (const m of modulesData) {
+          try {
+            const sRes = await api.get(`/students/by-module/${m.id}`);
+            if (Array.isArray(sRes.data)) allStudents.push(...sRes.data);
+          } catch (err) {
+            console.error("fetch students for module error:", err);
+          }
+        }
+        setStudents(allStudents);
+      }
+    } catch (err) {
+      console.error("fetchAllStatic error:", err);
+      setErrorMsg("Impossible de charger les données statiques.");
+    }
+  };
+
+  // -----------------------------
+  // FETCH NOTES
+  // -----------------------------
   const fetchNotes = async () => {
     setLoading(true);
     setErrorMsg(null);
-
     try {
-      const res = await api.get("/notes/student/my");
-
-      const raw = Array.isArray(res.data?.data)
-        ? res.data.data
-        : Array.isArray(res.data)
-        ? res.data
-        : [];
-
-      const normalized: NoteShape[] = raw.map((n: any) => {
-        const semester =
-          Number(n.semester) > 0
-            ? Number(n.semester)
-            : Number(n.module?.semester) > 0
-            ? Number(n.module.semester)
-            : 1;
-
-        return {
-          id: n.id,
-          ce: toNumber(n.ce),
-          fe: toNumber(n.fe),
-          score: toNumber(n.score),
-          appreciation: n.appreciation ?? "",
-          session: n.session ?? "Normale",
-          semester,
-          module: n.module
-            ? {
-                id: n.module.id,
-                title: n.module.title,
-                code: n.module.code,
-                credits: toNumber(n.module.credits),
-                semester,
-              }
-            : undefined,
-          student: n.student,
-        };
-      });
-
-      setNotes(normalized);
+      if (isTeacher) {
+        let notesArr: NoteItem[] = [];
+        for (const m of modules) {
+          if (moduleId !== "all" && m.id !== moduleId) continue;
+          try {
+            const r = await api.get(`/notes/module/${m.id}`);
+            if (Array.isArray(r.data?.data)) notesArr.push(...r.data.data);
+          } catch (err) {
+            console.error(`fetch notes for module ${m.id} error:`, err);
+          }
+        }
+        setNotes(notesArr);
+      } else {
+        const params: any = {};
+        if (search) params.search = search;
+        if (promotionId !== "all") params.promotionId = promotionId;
+        if (moduleId !== "all") params.moduleId = moduleId;
+        if (session !== "all") params.session = session;
+        if (semester) params.semester = semester;
+        const res = await api.get("/notes", { params });
+        setNotes(Array.isArray(res.data?.data) ? res.data.data : []);
+      }
     } catch (err: any) {
       console.error("fetchNotes error:", err);
-      setErrorMsg(
-        err?.response?.data?.message ||
-          "Erreur lors du chargement des notes."
-      );
+      setErrorMsg(err?.response?.data?.message || "Erreur lors du chargement des notes");
     } finally {
       setLoading(false);
     }
   };
 
-  /* -------------------------
-     Filtrage
-  ------------------------- */
-  const filteredNotes = useMemo(() => {
-    if (viewMode === "AN") return notes;
-    const sem = viewMode === "S1" ? 1 : 2;
-    return notes.filter((n) => Number(n.semester) === sem);
-  }, [notes, viewMode]);
-
-  const moyenne = useMemo(
-    () => computeAverage(filteredNotes),
-    [filteredNotes]
-  );
-  const moyenneAnnuelle = useMemo(
-    () => computeAverage(notes),
-    [notes]
-  );
-
-  /* -------------------------
-     Export PDF
-  ------------------------- */
-  const exportPDF = () => {
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    let y = 60;
-
-    doc.setFontSize(14);
-    doc.text("Mes Notes - Étudiant", 40, y);
-    y += 30;
-
-    doc.setFontSize(10);
-    doc.text("Module", 40, y);
-    doc.text("Crédits", 220, y);
-    doc.text("EC", 280, y);
-    doc.text("EF", 330, y);
-    doc.text("Moy.", 380, y);
-    doc.text("Sem.", 430, y);
-    y += 10;
-    doc.line(40, y, 480, y);
-    y += 15;
-
-    filteredNotes.forEach((n) => {
-      if (y > 760) {
-        doc.addPage();
-        y = 60;
-      }
-      doc.text(n.module?.title ?? "-", 40, y);
-      doc.text(String(n.module?.credits ?? "-"), 220, y);
-      doc.text(format(n.ce), 280, y);
-      doc.text(format(n.fe), 330, y);
-      doc.text(format(n.score), 380, y);
-      doc.text(String(n.semester ?? "-"), 430, y);
-      y += 14;
-    });
-
-    y += 20;
-    doc.setFontSize(12);
-    doc.text(
-      viewMode === "AN"
-        ? `Moyenne annuelle : ${moyenneAnnuelle.toFixed(2)}`
-        : `Moyenne semestre ${viewMode === "S1" ? "1" : "2"} : ${moyenne.toFixed(
-            2
-          )}`,
-      40,
-      y
-    );
-
-    doc.save(`Notes_${viewMode}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  const fetchStudentsForModule = async (moduleId: string) => {
+    try {
+      const res = await api.get(`/students/by-module/${moduleId}`);
+      return Array.isArray(res.data) ? res.data : [];
+    } catch (err) {
+      console.error("fetchStudentsForModule error:", err);
+      return [];
+    }
   };
 
-  /* -------------------------
-     Export Excel
-  ------------------------- */
-  const exportExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(
-      filteredNotes.map((n) => ({
-        Module: n.module?.title,
-        Code: n.module?.code,
-        Crédits: n.module?.credits,
-        EC: n.ce,
-        EF: n.fe,
-        Moyenne: n.score,
-        Semestre: n.semester,
-        Appréciation: n.appreciation,
-      }))
-    );
+  // -----------------------------
+  // FORM HANDLERS
+  // -----------------------------
+  const openAddForm = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
 
+    if (!modules.length) return setErrorMsg("Aucun module disponible.");
+    const firstModuleId = modules[0].id;
+    const studentsForModule = await fetchStudentsForModule(firstModuleId);
+    if (!studentsForModule.length) return setErrorMsg("Aucun étudiant disponible pour ce module.");
+
+    setStudents(studentsForModule);
+    setEditingNote(null);
+    setForm({
+      studentId: studentsForModule[0].id,
+      moduleId: firstModuleId,
+      ce: "",
+      fe: "",
+      session: "Normale",
+      semester: "1",
+      appreciation: "",
+    });
+    setShowModal(true);
+  };
+
+  const openEditForm = async (n: NoteItem) => {
+    setEditingNote(n);
+    if (!students.find((s) => s.id === n.studentId)) {
+      const fetchedStudents = await fetchStudentsForModule(n.moduleId);
+      setStudents(fetchedStudents);
+    }
+    setForm({
+      studentId: n.studentId,
+      moduleId: n.moduleId,
+      ce: n.ce !== undefined && n.ce !== null ? String(n.ce) : "",
+      fe: n.fe !== undefined && n.fe !== null ? String(n.fe) : "",
+      session: n.session ?? "Normale",
+      semester: n.semester ? String(n.semester) : "1",
+      appreciation: n.appreciation ?? "",
+    });
+    setShowModal(true);
+  };
+
+  const handleSubmit = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    const payload = {
+      studentId: form.studentId,
+      moduleId: form.moduleId,
+      ce: form.ce === "" ? 0 : parseFloat(form.ce),
+      fe: form.fe === "" ? 0 : parseFloat(form.fe),
+      session: form.session,
+      semester: parseInt(form.semester || "1", 10),
+      appreciation: form.appreciation,
+    };
+    try {
+      if (editingNote) {
+        await api.put(`/notes/module/${payload.moduleId}/${editingNote.id}`, payload);
+      } else {
+        await api.post(`/notes/module/${payload.moduleId}/add`, payload);
+      }
+      setShowModal(false);
+      fetchNotes();
+      setSuccessMsg("Note enregistrée avec succès");
+    } catch (err: any) {
+      console.error("submit note error:", err);
+      setErrorMsg(err?.response?.data?.message || "Erreur lors de l'enregistrement de la note");
+    }
+  };
+
+  const deleteNote = async (id: string, moduleId?: string) => {
+    if (!window.confirm("Supprimer cette note ?")) return;
+    try {
+      if (moduleId) await api.delete(`/notes/module/${moduleId}/${id}`);
+      fetchNotes();
+      setSuccessMsg("Note supprimée");
+    } catch (err) {
+      console.error("delete note error:", err);
+      setErrorMsg("Erreur lors de la suppression de la note");
+    }
+  };
+
+  // -----------------------------
+  // EXPORT EXCEL
+  // -----------------------------
+  const exportToExcel = () => {
+    const data = notes.map((n) => {
+      const stud = n.student;
+      const mod = n.module;
+      const promotion = stud?.promotion ?? promotions.find((p) => p.id === stud?.promotionId);
+      const filiere = filieres.find((f) => f.id === promotion?.filiereId);
+      return {
+        Étudiant: `${stud?.nom ?? ""} ${stud?.prenom ?? ""}`.trim(),
+        Matricule: stud?.matricule ?? "",
+        Filière: filiere?.nom ?? "-",
+        Promotion: promotion?.nom ?? "-",
+        Module: mod?.title ?? mod?.code ?? "-",
+        CE: n.ce ?? "",
+        FE: n.fe ?? "",
+        Score: n.score ?? "",
+        Session: n.session ?? "",
+        Semestre: n.semester ?? "",
+        Appréciation: n.appreciation ?? "",
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Notes");
-
     const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-    saveAs(
-      new Blob([wbout], { type: "application/octet-stream" }),
-      `Notes_${viewMode}_${new Date().toISOString().slice(0, 10)}.xlsx`
-    );
+    saveAs(new Blob([wbout], { type: "application/octet-stream" }), `notes_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  /* -------------------------
-     Render
-  ------------------------- */
+  const moduleLabel = (m?: ModuleType | null) => (m ? m.title ?? m.code ?? "-" : "-");
+
+  // -----------------------------
+  // RENDER
+  // -----------------------------
+  if (!isAdmin && !isTeacher) {
+    return (
+      <div className="p-6">
+        <p className="text-red-600">Accès réservé aux enseignants et à l’administration</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-6">
-      <div className="max-w-5xl mx-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-semibold">Mes Notes</h1>
-          <div className="flex gap-2 flex-wrap">
-            <select
-              value={viewMode}
-              onChange={(e) =>
-                setViewMode(e.target.value as "S1" | "S2" | "AN")
-              }
-              className="border rounded px-2 py-1"
-            >
-              <option value="S1">Semestre 1</option>
-              <option value="S2">Semestre 2</option>
-              <option value="AN">Année complète</option>
-            </select>
-            <Button onClick={fetchNotes}>Actualiser</Button>
-            <Button onClick={exportPDF}>Export PDF</Button>
-            <Button onClick={exportExcel}>Export Excel</Button>
-            <Button onClick={handlePrint} variant="outline">
-              Imprimer
-            </Button>
-          </div>
+    <div className="p-6 space-y-4">
+      {/* HEADER */}
+      <div className="flex justify-between items-center flex-wrap gap-2">
+        <h2 className="text-2xl font-bold">Notes des Élèves Officiers</h2>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={openAddForm}>Ajouter une note</Button>
+          <Button onClick={fetchNotes} variant="outline">Actualiser</Button>
+          <Button onClick={exportToExcel} variant="ghost">Exporter Excel</Button>
         </div>
+      </div>
 
-        {errorMsg && <div className="text-red-600 mb-3">{errorMsg}</div>}
+      {/* ERROR / SUCCESS */}
+      {errorMsg && <p className="text-red-600">{errorMsg}</p>}
+      {successMsg && <p className="text-green-600">{successMsg}</p>}
 
-        {loading ? (
-          <div className="text-center py-10">Chargement...</div>
-        ) : (
-          <div ref={printRef} className="bg-white border rounded p-4">
-            {filteredNotes.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                Aucune note disponible
-              </div>
+      {/* TABLE */}
+      <div className="overflow-x-auto bg-white rounded border">
+        <table className="min-w-full text-sm text-center border-collapse">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="px-2 py-1 border">Elève</th>
+              <th className="px-2 py-1 border">Matricule</th>
+              <th className="px-2 py-1 border">Filière</th>
+              <th className="px-2 py-1 border">Promotion</th>
+              <th className="px-2 py-1 border">Module</th>
+              <th className="px-2 py-1 border">CE</th>
+              <th className="px-2 py-1 border">FE</th>
+              <th className="px-2 py-1 border">Score</th>
+              <th className="px-2 py-1 border">Appréciation</th>
+              <th className="px-2 py-1 border">Session</th>
+              <th className="px-2 py-1 border">Semestre</th>
+              <th className="px-2 py-1 border">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={12} className="py-4">Chargement...</td></tr>
+            ) : notes.length === 0 ? (
+              <tr><td colSpan={12} className="py-4 text-gray-500">Aucune note trouvée</td></tr>
             ) : (
-              <table className="w-full text-sm border-collapse">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Module</th>
-                    <th className="px-3 py-2 text-center">Code</th>
-                    <th className="px-3 py-2 text-center">Crédits</th>
-                    <th className="px-3 py-2 text-center">EC</th>
-                    <th className="px-3 py-2 text-center">EF</th>
-                    <th className="px-3 py-2 text-center">Moyenne</th>
-                    <th className="px-3 py-2 text-center">Semestre</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredNotes.map((n) => (
-                    <tr key={n.id} className="border-t hover:bg-gray-50">
-                      <td className="px-3 py-2">{n.module?.title}</td>
-                      <td className="px-3 py-2 text-center">
-                        {n.module?.code}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        {n.module?.credits}
-                      </td>
-                      <td
-                        className={`px-3 py-2 text-center font-semibold ${
-                          n.ce >= 10 ? "text-green-700" : "text-red-600"
-                        }`}
-                      >
-                        {format(n.ce)}
-                      </td>
-                      <td
-                        className={`px-3 py-2 text-center font-semibold ${
-                          n.fe >= 10 ? "text-green-700" : "text-red-600"
-                        }`}
-                      >
-                        {format(n.fe)}
-                      </td>
-                      <td
-                        className={`px-3 py-2 text-center font-semibold ${
-                          n.score >= 10 ? "text-green-700" : "text-red-600"
-                        }`}
-                      >
-                        {format(n.score)}
-                      </td>
-                      <td className="px-3 py-2 text-center">{n.semester}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              notes.map((n) => (
+                <tr key={n.id} className="hover:bg-gray-50">
+                  <td className="px-2 py-1">{n.student?.nom} {n.student?.prenom}</td>
+                  <td className="px-2 py-1">{n.student?.matricule ?? "-"}</td>
+                  <td className="px-2 py-1">{n.student?.promotion?.filiere?.nom ?? "-"}</td>
+                  <td className="px-2 py-1">{n.student?.promotion?.nom ?? "-"}</td>
+                  <td className="px-2 py-1">{moduleLabel(n.module)}</td>
+                  <td className="px-2 py-1">{n.ce ?? "-"}</td>
+                  <td className="px-2 py-1">{n.fe ?? "-"}</td>
+                  <td className="px-2 py-1">{n.score ?? "-"}</td>
+                  <td className="px-2 py-1">{n.appreciation ?? "-"}</td>
+                  <td className="px-2 py-1">{n.session ?? "-"}</td>
+                  <td className="px-2 py-1">{n.semester ?? "-"}</td>
+                  <td className="px-2 py-1 flex gap-2 justify-center">
+                    <button onClick={() => openEditForm(n)} className="p-2 border rounded hover:bg-gray-100">✏️</button>
+                    <button onClick={() => deleteNote(n.id, n.moduleId)} className="p-2 border rounded bg-red-500 text-white hover:opacity-90">🗑️</button>
+                  </td>
+                </tr>
+              ))
             )}
+          </tbody>
+        </table>
+      </div>
 
-            <div className="mt-4 text-right font-semibold">
-              {viewMode === "AN"
-                ? `Moyenne annuelle : ${moyenneAnnuelle.toFixed(2)}`
-                : `Moyenne semestre ${
-                    viewMode === "S1" ? "1" : "2"
-                  } : ${moyenne.toFixed(2)}`}
+      {/* MODAL FORM */}
+      {showModal && (
+        <Modal onClose={() => setShowModal(false)} title={editingNote ? "Modifier Note" : "Ajouter Note"}>
+          <div className="space-y-2">
+            <label>Module</label>
+            <select
+              value={form.moduleId}
+              onChange={async (e) => {
+                const mId = e.target.value;
+                setForm({ ...form, moduleId: mId });
+                const studs = await fetchStudentsForModule(mId);
+                setStudents(studs);
+                setForm((prev) => ({ ...prev, studentId: studs[0]?.id ?? "" }));
+              }}
+              className="w-full border rounded p-2"
+            >
+              {modules.map((m) => <option key={m.id} value={m.id}>{moduleLabel(m)}</option>)}
+            </select>
+
+            <label>Étudiant</label>
+            <select
+              value={form.studentId}
+              onChange={(e) => setForm({ ...form, studentId: e.target.value })}
+              className="w-full border rounded p-2"
+            >
+              {students.map((s) => <option key={s.id} value={s.id}>{s.nom} {s.prenom}</option>)}
+            </select>
+
+            <label>CE</label>
+            <Input type="number" value={form.ce} onChange={(e) => setForm({ ...form, ce: e.target.value })} />
+
+            <label>FE</label>
+            <Input type="number" value={form.fe} onChange={(e) => setForm({ ...form, fe: e.target.value })} />
+
+            <label>Session</label>
+            <select value={form.session} onChange={(e) => setForm({ ...form, session: e.target.value })} className="w-full border rounded p-2">
+              <option value="Normale">Normale</option>
+              <option value="Rattrapage">Rattrapage</option>
+            </select>
+
+            <label>Semestre</label>
+            <select value={form.semester} onChange={(e) => setForm({ ...form, semester: e.target.value })} className="w-full border rounded p-2">
+              <option value="1">1</option>
+              <option value="2">2</option>
+            </select>
+
+            <label>Appréciation</label>
+            <Input type="text" value={form.appreciation} onChange={(e) => setForm({ ...form, appreciation: e.target.value })} />
+
+            {errorMsg && <p className="text-red-600">{errorMsg}</p>}
+            {successMsg && <p className="text-green-600">{successMsg}</p>}
+
+            <div className="flex justify-end gap-2 mt-2">
+              <Button onClick={() => setShowModal(false)} variant="outline">Annuler</Button>
+              <Button onClick={handleSubmit}>{editingNote ? "Modifier" : "Ajouter"}</Button>
             </div>
           </div>
-        )}
-      </div>
+        </Modal>
+      )}
     </div>
   );
 };
 
-export default NotesEtudiant;
+export default Notes;
